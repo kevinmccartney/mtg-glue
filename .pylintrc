@@ -1,0 +1,32 @@
+[MASTER]
+ignore-patterns=^\.venv/,^\.env/
+extension-pkg-whitelist=
+
+[MESSAGES CONTROL]
+disable=
+    C0114,  # missing-module-docstring
+    C0115,  # missing-class-docstring
+    C0116,  # missing-function-docstring
+
+[FORMAT]
+max-line-length=88
+
+[DESIGN]
+max-args=8
+max-attributes=15
+max-branches=20
+max-locals=30
+max-returns=8
+max-statements=80
+
+[REPORTS]
+output-format=text
+reports=no
+
+[TYPECHECK]
+ignored-modules=
+ignored-classes=
+
+[BASIC]
+good-names=i,j,k,ex,Run,_,id
+

@@ -1,0 +1,181 @@
+skip_set_codes:
+  - "AAFIN"
+  - "AONE"
+  - "AAINR"
+  - "ASMH3"
+
+skip_name_substr:
+  - "theme card"
+
+mapper_rules:
+  - name: "language-map"
+    field: "language"
+    map:
+      EN: "English"
+      ES: "Spanish"
+      FR: "French"
+      DE: "German"
+      IT: "Italian"
+      PT: "Portuguese"
+      JA: "Japanese"
+      KO: "Korean"
+      ZH: "Chinese"
+      RU: "Russian"
+
+rewrite_rules:
+  - name: "land-remove-number"
+    property: "name"
+    match: "^(Island|Mountain|Plains|Swamp|Forest)\\s\\(\\d*\\)(.*)"
+    value: "$1$2"
+  - name: "token-remove-suffix"
+    property: "name"
+    match: "^(.*)\\s(Token)(\\s\\(\\d*\\))?$"
+    value: "$1"
+  - name: art-variants
+    property: "name"
+    match: "^(.*)\\s\\((Borderless|Showcase|Extended Art|Retro Frame|Anime Borderless|Rainbow Foil|Full Art|Retor Frame)\\)$"
+    value: "$1"
+
+overrides:
+  FCA.33:
+    type: "override"
+    data:
+      name: "Baron Rivalry"
+  FCA.59:
+    type: "override"
+    data:
+      name: "Clive Rosfield"
+  FCA.28:
+    type: "override"
+    data:
+      name: "Endwalker"
+  MKM.213:
+    type: "override"
+    data:
+      name: "Kraul Whipcracker"
+  FCA.24:
+    type: "override"
+    data:
+      name: "Loran of the Third Path"
+  VOW.339:
+    type: "override"
+    data:
+      name: "Mysterious Blood Illness"
+  FCA.45:
+    type: "override"
+    data:
+      name: "Newfound Adventure"
+  FCA.57:
+    type: "override"
+    data:
+      name: "Orphan, Cocoon fal'Cie"
+  FCA.38:
+    type: "override"
+    data:
+      name: "Vaan, Aspiring Sky Pirate"
+  FCA.4:
+    type: "override"
+    data:
+      name: "Wild Rose Rebellion"
+  ONE.267:
+    type: "override"
+    data:
+      name: "Plains"
+  LCC.123:
+    type: "override"
+    data:
+      name: "Hakbal of the Surging Soul"
+  VOW.332:
+    type: "override"
+    data:
+      name: "Jonathan Harker"
+  VOW.341:
+    type: "override"
+    data:
+      name: "Dracula the Voyager"
+  SLD.1927:
+    type: "override"
+    data:
+      name: "Mr. Krabs, Penny Pincher"
+  SLD.1931:
+    type: "override"
+    data:
+      name: "Patrick Star"
+  ECC.128:
+    type: "override"
+    data:
+      collector_number: "120" # EchoMTG thinks Binding the Old Gods is 128
+  SLD.1453:
+    type: "override"
+    data:
+      name: "Ajani Goldmane"
+  ECC.56:
+    type: "override"
+    data:
+      name: "Arcane Signet"
+  FIN.420:
+    type: "override"
+    data:
+      name: "Cid, Timeless Artificer"
+  AKH.251:
+    type: "override"
+    data:
+      name: "Island"
+  TMKM.20:
+    type: "override"
+    data:
+      name: "Thopter"
+  TDSK.13:
+    type: "override"
+    data:
+      name: "Insect"
+  ECC.58:
+    type: "override"
+    data:
+      name: "Sol Ring"
+  ECC.60:
+    type: "override"
+    data:
+      name: "Command Tower"
+  TFIN.16:
+    type: "split"
+    data:
+      - name: "Bird"
+        collector_number: "16"
+      - name: "Wizard"
+        collector_number: "14"
+  TFIN.17:
+    type: "split"
+    data:
+      - name: "Bird"
+        collector_number: "17"
+      - name: "Wizard"
+        collector_number: "15"
+  TFDN.27:
+    type: "split"
+    data:
+      - name: "Cat"
+        collector_number: "27"
+      - name: "Phyrexian Goblin"
+        collector_number: "31"
+  TFDN.28:
+    type: "split"
+    data:
+      - name: "Cat Beast"
+        collector_number: "28"
+      - name: "Dragon"
+        collector_number: "17"
+  TINR.21:
+    type: "split"
+    data:
+      - name: "Blood"
+        collector_number: "21"
+      - name: "Clue"
+        collector_number: "22"
+  # TECC.3:
+  #   type: "split"
+  #   data:
+  #     - name: "Zombie"
+  #       collector_number: "3"
+  #     - name: "Elf Warrior"
+  #       collector_number: "4"

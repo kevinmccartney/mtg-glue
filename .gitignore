@@ -1,0 +1,31 @@
+# Project-specific files
+.out/*
+!.out/.gitkeep
+.data/*
+!.data/.gitkeep
+!.data/config.yaml
+
+# macOS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+Icon?
+ehthumbs.db
+Thumbs.db
+
+# python files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+.venv/
+.env/
+.mypy_cache/

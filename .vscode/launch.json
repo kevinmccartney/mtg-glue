@@ -1,0 +1,18 @@
+{
+  // Debug configurations for this workspace.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Echo -> Moxfield (poetry)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/mtg_glue/echo_mtg_to_moxfield.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    }
+  ]
+}
