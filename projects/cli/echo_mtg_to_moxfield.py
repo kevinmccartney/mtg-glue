@@ -4,17 +4,17 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from mtg_glue.models import (
+from models import (
     EchoMtgExportRow,
     MoxfieldImportRow,
 )
-from mtg_glue.lib.config import DEFAULT_CONFIG_PATH, load_config
-from mtg_glue.lib.rewrites import apply_rewrite_rules
-from mtg_glue.lib.mappers import apply_mapper_rules
-from mtg_glue.lib.overrides import apply_override
-from mtg_glue.lib.transformers import echo_to_moxfield_rows, manual_to_moxfield_row
-from mtg_glue.lib.filters import apply_filter_rules
-from mtg_glue.lib.reporters import write_moxfield_reports
+from lib.config import DEFAULT_CONFIG_PATH, load_config
+from lib.rewrites import apply_rewrite_rules
+from lib.mappers import apply_mapper_rules
+from lib.overrides import apply_override
+from lib.transformers import echo_to_moxfield_rows, manual_to_moxfield_row
+from lib.filters import apply_filter_rules
+from lib.reporters import write_moxfield_reports
 
 
 def main() -> int:

@@ -1,7 +1,7 @@
 from typing import Optional
 
-from mtg_glue.models import MapperRule
-from mtg_glue.models.echo_mtg_export_row import EchoMtgExportRow
+from models import MapperRule
+from models.echo_mtg_export_row import EchoMtgExportRow
 
 
 def map_field(raw: Optional[str], rule: MapperRule) -> Optional[str]:

@@ -24,7 +24,7 @@ from pydantic import (
     model_validator,
 )
 
-from mtg_glue.lib.utils import to_bool
+from lib.utils import to_bool
 
 
 Finish = Literal[None, "foil", "etched"]

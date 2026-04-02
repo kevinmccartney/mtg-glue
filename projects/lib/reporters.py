@@ -2,7 +2,7 @@ import csv
 from pathlib import Path
 from typing import Iterable
 
-from mtg_glue.models import MoxfieldImportRow
+from models import MoxfieldImportRow
 
 
 def _row_to_dict(row: MoxfieldImportRow, fieldnames: list[str]) -> dict[str, str]:

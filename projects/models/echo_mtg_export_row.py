@@ -14,7 +14,7 @@ from typing import Annotated, Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
-from mtg_glue.lib.utils import to_bool, to_date, to_decimal, to_int
+from lib.utils import to_bool, to_date, to_decimal, to_int
 
 Condition = str
 

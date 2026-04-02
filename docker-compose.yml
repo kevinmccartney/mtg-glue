@@ -1,0 +1,10 @@
+services:
+  browser-glue:
+    build:
+      context: .
+      dockerfile: projects/browser_automation/Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - ./.data:/app/.data
+      - ./.out:/app/.out

@@ -1,7 +1,7 @@
 import re
 
-from mtg_glue.models import RewriteRule
-from mtg_glue.models.echo_mtg_export_row import EchoMtgExportRow
+from models import RewriteRule
+from models.echo_mtg_export_row import EchoMtgExportRow
 
 
 def apply_rewrite_rules(

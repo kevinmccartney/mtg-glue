@@ -2,7 +2,7 @@ from typing import Optional
 
 from pydantic.types import T
 
-from mtg_glue.models import EchoMtgExportRow, MoxfieldImportRow, ManuallyTracked
+from models import EchoMtgExportRow, MoxfieldImportRow, ManuallyTracked
 
 
 def echo_to_moxfield_rows(row: EchoMtgExportRow) -> list[MoxfieldImportRow]:

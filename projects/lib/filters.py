@@ -1,7 +1,7 @@
 import re
 
-from mtg_glue.models import FilterRule
-from mtg_glue.models.echo_mtg_export_row import EchoMtgExportRow
+from models import FilterRule
+from models.echo_mtg_export_row import EchoMtgExportRow
 
 
 def apply_filter_rules(row: EchoMtgExportRow, rules: list[FilterRule]) -> bool:

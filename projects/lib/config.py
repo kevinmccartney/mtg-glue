@@ -4,9 +4,9 @@ from pathlib import Path
 
 import yaml
 
-from mtg_glue.models.types import Config
+from models.types import Config
 
-DEFAULT_CONFIG_PATH = Path(".data/config.yaml")
+DEFAULT_CONFIG_PATH = Path("config.yaml")
 
 DEFAULT_CONFIG: Config = Config()
 

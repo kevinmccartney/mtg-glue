@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from mtg_glue.models import EchoMtgExportRow
-from mtg_glue.models.types import OverrideDest, OverrideRule, OverrideSource
+from models import EchoMtgExportRow
+from models.types import OverrideDest, OverrideRule, OverrideSource
 
 
 def _match_rule(row: EchoMtgExportRow, source: OverrideSource) -> bool:

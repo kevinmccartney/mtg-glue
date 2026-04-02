@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
-from mtg_glue.echo_mtg_to_moxfield import main as run_moxfield_import
+from cli.echo_mtg_to_moxfield import main as run_moxfield_import
 
 load_dotenv()
 

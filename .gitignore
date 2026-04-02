@@ -1,11 +1,24 @@
-# Project-specific files
+# data & output
 .out/*
 !.out/.gitkeep
 .data/*
 !.data/.gitkeep
-!.data/config.yaml
 
-# macOS files
+# secrets
+.env
+.env/
+
+# python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+.venv/
+.mypy_cache/
+
+# macOS
 .DS_Store
 .DS_Store?
 ._*
@@ -16,17 +29,3 @@ Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 Icon?
-ehthumbs.db
-Thumbs.db
-
-# python files
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.pdb
-*.egg-info/
-.venv/
-.env
-.env/
-.mypy_cache/
