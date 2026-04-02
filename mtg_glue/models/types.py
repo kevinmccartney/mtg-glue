@@ -1,31 +1,72 @@
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import TypedDict, Union
 
-from pydantic import BaseModel, ConfigDict, Field
-
-
-class CardOverride(TypedDict, total=False):
-    name: str
-    edition: str
-    condition: str
-    language: str
-    foil: Literal["foil", "etched"]
-    collector_number: str
-    alter: bool
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
-class SplitOverride(TypedDict, total=False):
-    type: Literal["split"]
-    data: list[CardOverride]
+class OverrideSource(BaseModel):
+    """Criteria for matching an incoming EchoMTG row to an override rule."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    set_code: str | None = None
+    collector_number: str | None = None
+    name: str | None = None
+
+    @field_validator("set_code", mode="before")
+    @classmethod
+    def _normalize_set_code(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        return str(v).strip().upper()
+
+    @field_validator("collector_number", mode="before")
+    @classmethod
+    def _coerce_collector_number(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        return str(v).strip()
 
 
-class SimpleOverride(TypedDict, total=False):
-    type: Literal["override"]
-    data: CardOverride
+class OverrideDest(BaseModel):
+    """Partial field values applied on top of a matched base row."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    name: str | None = None
+    set_code: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("set_code", "edition"),
+    )
+    collector_number: str | None = None
+    language: str | None = None
+    condition: str | None = None
+    reg_qty: int | None = None
+    foil_qty: int | None = None
+
+    @field_validator("collector_number", mode="before")
+    @classmethod
+    def _coerce_collector_number(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        return str(v).strip()
+
+    @field_validator("set_code", mode="before")
+    @classmethod
+    def _normalize_set_code(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        return str(v).strip().upper()
 
 
-OverrideEntry = SimpleOverride | SplitOverride
+class OverrideRule(BaseModel):
+    """A single override rule: match on source, apply dest(s) to produce output rows."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: OverrideSource
+    dest: Union[OverrideDest, list[OverrideDest]]
 
 
 class RewriteRule(TypedDict, total=False):
@@ -41,6 +82,26 @@ class MapperRule(TypedDict, total=False):
     map: dict[str, str]
 
 
+class FilterRule(TypedDict, total=False):
+    name: str
+    field: str
+    match: str
+
+
+class OutputConfig(BaseModel):
+    aggregation: str | None = None
+
+
+class ManuallyTracked(BaseModel):
+    name: str
+    edition: str
+    collector_number: str | None = None
+    foil: bool = False
+    count: int = 1
+    condition: str = "NM"
+    language: str = "English"
+
+
 class Config(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -49,8 +110,9 @@ class Config(BaseModel):
         validate_assignment=True,
     )
 
-    skip_set_codes: set[str] = Field(default_factory=set)
-    skip_name_substr: list[str] = Field(default_factory=list)
-    overrides: dict[str, OverrideEntry] = Field(default_factory=dict)
+    overrides: list[OverrideRule] = Field(default_factory=list)
     rewrite_rules: list[RewriteRule] = Field(default_factory=list)
     mapper_rules: list[MapperRule] = Field(default_factory=list)
+    filter_rules: list[FilterRule] = Field(default_factory=list)
+    output: OutputConfig = Field(default_factory=OutputConfig)
+    manually_tracked: list[ManuallyTracked] = Field(default_factory=list)

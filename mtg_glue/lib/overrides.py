@@ -1,37 +1,33 @@
 from __future__ import annotations
 
-from typing import Optional
+from mtg_glue.models import EchoMtgExportRow
+from mtg_glue.models.types import OverrideDest, OverrideRule, OverrideSource
 
-from mtg_glue.models import EchoMtgExportRow, OverrideEntry
+
+def _match_rule(row: EchoMtgExportRow, source: OverrideSource) -> bool:
+    """Return True if all specified source criteria match the row."""
+    criteria = source.model_dump(exclude_none=True)
+    row_data = row.model_dump()
+    return all(row_data.get(k) == v for k, v in criteria.items())
+
+
+def _apply_dest(base_row: EchoMtgExportRow, dest: OverrideDest) -> EchoMtgExportRow:
+    """Apply non-None fields from dest on top of base_row."""
+    updates = {k: v for k, v in dest.model_dump().items() if v is not None}
+    return base_row.model_copy(update=updates)
 
 
 def apply_override(
-    base_row: EchoMtgExportRow, overrides: dict[str, OverrideEntry]
+    base_row: EchoMtgExportRow, overrides: list[OverrideRule]
 ) -> list[EchoMtgExportRow]:
-    def get_override(
-        row: EchoMtgExportRow, overrides: dict[str, OverrideEntry]
-    ) -> Optional[OverrideEntry]:
-        if not row.collector_number or not row.set_code:
-            return None
-        key = f"{row.set_code.strip().upper()}.{row.collector_number.strip()}"
-        return overrides.get(key)
+    """Find the first matching override rule and apply its dest(s).
 
-    override = get_override(base_row, overrides)
-
-    if not override:
-        return [base_row]
-
-    if override.get("type") == "split":
-        split_rows: list[EchoMtgExportRow] = []
-        records = override.get("data") or []
-        if isinstance(records, list):
-            for entry in records:
-                if isinstance(entry, dict):
-                    split_rows.append(base_row.model_copy(update=entry))
-        return split_rows or [base_row]
-
-    data = override.get("data") if isinstance(override, dict) else None
-    if isinstance(data, dict):
-        return [base_row.model_copy(update=data)]
-
+    Returns a list of one row (override) or multiple rows (split).
+    If no rule matches, returns the original row unchanged.
+    """
+    for rule in overrides:
+        if _match_rule(base_row, rule.source):
+            if isinstance(rule.dest, list):
+                return [_apply_dest(base_row, d) for d in rule.dest]
+            return [_apply_dest(base_row, rule.dest)]
     return [base_row]

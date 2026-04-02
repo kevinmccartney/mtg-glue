@@ -20,12 +20,24 @@ def apply_rewrite_rules(
         current = data.get(prop)
         if not isinstance(current, str):
             continue
-        # Convert $1 to \g<1> for Python's regex replacement
-        replacement = re.sub(r"\$(\d+)", r"\\g<\1>", value)
         try:
             regex = re.compile(pattern)
         except re.error:
             continue
         if regex.search(current):
-            data[prop] = regex.sub(lambda m: m.expand(replacement), current)
+
+            def _replacer(match: re.Match[str]) -> str:
+                def _sub_ref(ref_match: re.Match[str]) -> str:
+                    idx = int(ref_match.group(1))
+                    try:
+                        return match.group(idx) or ""
+                    except IndexError:
+                        return ""
+
+                return re.sub(r"\$(\d+)", _sub_ref, value)
+
+            try:
+                data[prop] = regex.sub(_replacer, current)
+            except re.error:
+                continue
     return row.model_copy(update=data)

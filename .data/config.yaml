@@ -1,12 +1,3 @@
-skip_set_codes:
-  - "AAFIN"
-  - "AONE"
-  - "AAINR"
-  - "ASMH3"
-
-skip_name_substr:
-  - "theme card"
-
 mapper_rules:
   - name: "language-map"
     field: "language"
@@ -23,159 +14,571 @@ mapper_rules:
       RU: "Russian"
 
 rewrite_rules:
-  - name: "land-remove-number"
+  - name: "remove-number"
     property: "name"
-    match: "^(Island|Mountain|Plains|Swamp|Forest)\\s\\(\\d*\\)(.*)"
-    value: "$1$2"
-  - name: "token-remove-suffix"
+    match: "^(.*)\\s\\(\\d*\\)(.*)$"
+    value: "$1$3"
+  - name: "remove-token"
     property: "name"
-    match: "^(.*)\\s(Token)(\\s\\(\\d*\\))?$"
-    value: "$1"
-  - name: art-variants
+    match: "^(.*)\\s(Token)(.*)$"
+    value: "$1$3"
+  - name: "remove-art-variants"
     property: "name"
-    match: "^(.*)\\s\\((Borderless|Showcase|Extended Art|Retro Frame|Anime Borderless|Rainbow Foil|Full Art|Retor Frame)\\)$"
-    value: "$1"
+    match: "^(.*)\\s\\((Borderless|Showcase|Extended Art|Retro Frame|Anime Borderless|Rainbow Foil|Full Art|Retor Frame)\\)(.*)$"
+    value: "$1$3"
+
+# output:
+#   aggregation: "edition"
+
+manually_tracked: []
+
+filter_rules:
+  - name: "skip-set-codes"
+    field: "set_code"
+    match: "^(AAFIN|AONE|AAINR|ASMH3)$"
+  - name: "skip-theme-card"
+    field: "name"
+    match: "Theme Card$"
 
 overrides:
-  FCA.33:
-    type: "override"
-    data:
-      name: "Baron Rivalry"
-  FCA.59:
-    type: "override"
-    data:
-      name: "Clive Rosfield"
-  FCA.28:
-    type: "override"
-    data:
-      name: "Endwalker"
-  MKM.213:
-    type: "override"
-    data:
-      name: "Kraul Whipcracker"
-  FCA.24:
-    type: "override"
-    data:
-      name: "Loran of the Third Path"
-  VOW.339:
-    type: "override"
-    data:
-      name: "Mysterious Blood Illness"
-  FCA.45:
-    type: "override"
-    data:
-      name: "Newfound Adventure"
-  FCA.57:
-    type: "override"
-    data:
-      name: "Orphan, Cocoon fal'Cie"
-  FCA.38:
-    type: "override"
-    data:
-      name: "Vaan, Aspiring Sky Pirate"
-  FCA.4:
-    type: "override"
-    data:
-      name: "Wild Rose Rebellion"
-  ONE.267:
-    type: "override"
-    data:
-      name: "Plains"
-  LCC.123:
-    type: "override"
-    data:
-      name: "Hakbal of the Surging Soul"
-  VOW.332:
-    type: "override"
-    data:
-      name: "Jonathan Harker"
-  VOW.341:
-    type: "override"
-    data:
-      name: "Dracula the Voyager"
-  SLD.1927:
-    type: "override"
-    data:
-      name: "Mr. Krabs, Penny Pincher"
-  SLD.1931:
-    type: "override"
-    data:
-      name: "Patrick Star"
-  ECC.128:
-    type: "override"
-    data:
-      collector_number: "120" # EchoMTG thinks Binding the Old Gods is 128
-  SLD.1453:
-    type: "override"
-    data:
-      name: "Ajani Goldmane"
-  ECC.56:
-    type: "override"
-    data:
-      name: "Arcane Signet"
-  FIN.420:
-    type: "override"
-    data:
-      name: "Cid, Timeless Artificer"
-  AKH.251:
-    type: "override"
-    data:
-      name: "Island"
-  TMKM.20:
-    type: "override"
-    data:
-      name: "Thopter"
-  TDSK.13:
-    type: "override"
-    data:
-      name: "Insect"
-  ECC.58:
-    type: "override"
-    data:
-      name: "Sol Ring"
-  ECC.60:
-    type: "override"
-    data:
-      name: "Command Tower"
-  TFIN.16:
-    type: "split"
-    data:
-      - name: "Bird"
-        collector_number: "16"
-      - name: "Wizard"
-        collector_number: "14"
-  TFIN.17:
-    type: "split"
-    data:
-      - name: "Bird"
-        collector_number: "17"
-      - name: "Wizard"
-        collector_number: "15"
-  TFDN.27:
-    type: "split"
-    data:
-      - name: "Cat"
-        collector_number: "27"
-      - name: "Phyrexian Goblin"
-        collector_number: "31"
-  TFDN.28:
-    type: "split"
-    data:
-      - name: "Cat Beast"
-        collector_number: "28"
-      - name: "Dragon"
-        collector_number: "17"
-  TINR.21:
-    type: "split"
-    data:
+  - source:
+      set_code: ECC
+      collector_number: 128
+    dest:
+      - collector_number: 120
+  - source:
+      set_code: FCA
+      collector_number: 4
+    dest:
+      - name: "Wild Rose Rebellion"
+  - source:
+      set_code: FCA
+      collector_number: 33
+    dest:
+      - name: "Baron Rivalry"
+  - source:
+      set_code: FCA
+      collector_number: 59
+    dest:
+      - name: "Clive Rosfield"
+  - source:
+      set_code: FCA
+      collector_number: 24
+    dest:
+      - name: "Loran of the Third Path"
+  - source:
+      set_code: FCA
+      collector_number: 28
+    dest:
+      - name: "Endwalker"
+  - source:
+      set_code: FCA
+      collector_number: 45
+    dest:
+      - name: "Newfound Adventure"
+  - source:
+      set_code: FCA
+      collector_number: 57
+    dest:
+      - name: "Orphan, Cocoon fal'Cie"
+  - source:
+      set_code: FCA
+      collector_number: 38
+    dest:
+      - name: "Vaan, Aspiring Sky Pirate"
+  - source:
+      set_code: LCC
+      collector_number: 123
+    dest:
+      - name: "Hakbal of the Surging Soul"
+  - source:
+      set_code: MKM
+      collector_number: 213
+    dest:
+      - name: "Kraul Whipcracker"
+  - source:
+      set_code: SLD
+      collector_number: 1927
+    dest:
+      - name: "Mr. Krabs, Penny Pincher"
+  - source:
+      set_code: SLD
+      collector_number: 1931
+    dest:
+      - name: "Patrick Star"
+  - source:
+      set_code: TFDN
+      name: "Elf Warrior // Rat (0030) Double-Sided Token"
+    dest:
+      - name: "Elf Warrior"
+        collector_number: 19
+      - name: "Rat"
+        collector_number: 30
+  - source:
+      set_code: TTDC
+      name: "Dragon Illusion // Monk Double-Sided Token"
+    dest:
+      - name: "Dragon Illusion"
+        collector_number: 15
+      - name: "Monk"
+        collector_number: 3
+        set_code: TTDM
+  - source:
+      set_code: TTDC
+      name: "First Mate Ragavan // Treasure Double-Sided Token"
+    dest:
+      - name: "First Mate Ragavan"
+        collector_number: 18
+      - name: "Treasure"
+        collector_number: 16
+        set_code: TTDM
+  - source:
+      set_code: TTDC
+      name: "Monk // Treasure Double-Sided Token"
+    dest:
+      - name: "Monk"
+        collector_number: 1
+        set_code: TTDM
+      - name: "Treasure"
+        collector_number: 16
+        set_code: TTDM
+  - source:
+      set_code: TMID
+      name: "Human (001) // Elemental (007) Double-sided Token"
+    dest:
+      - name: "Human"
+        collector_number: 1
+      - name: "Elemental"
+        collector_number: 7
+  - source:
+      set_code: TINR
+      name: "Blood // Clue Double-Sided Token"
+    dest:
       - name: "Blood"
-        collector_number: "21"
+        collector_number: 21
       - name: "Clue"
-        collector_number: "22"
-  # TECC.3:
-  #   type: "split"
-  #   data:
-  #     - name: "Zombie"
-  #       collector_number: "3"
-  #     - name: "Elf Warrior"
-  #       collector_number: "4"
+        collector_number: 22
+  - source:
+      set_code: TINR
+      name: "Clue // Eldrazi Horror Double-Sided Token"
+    dest:
+      - name: "Clue"
+        collector_number: 22
+      - name: "Eldrazi Horror"
+        collector_number: 1
+  - source:
+      set_code: TINR
+      name: "Demon // Human Cleric Double-Sided Token"
+    dest:
+      - name: "Demon"
+        collector_number: 6
+      - name: "Human Cleric"
+        collector_number: 19
+  - source:
+      set_code: TINR
+      name: "Human (001) // Elemental (007) Double-sided Token"
+    dest:
+      - name: "Human"
+        collector_number: 1
+      - name: "Elemental"
+        collector_number: 7
+  - source:
+      set_code: TINR
+      name: "Human (0014) // Emblem - Chandra, Dressed to Kill Double-Sided Token"
+    dest:
+      - name: "Human"
+        collector_number: 14
+      - name: "Chandra, Dressed to Kill Emblem"
+        collector_number: 24
+  - source:
+      set_code: TINR
+      name: "Human Soldier (0003) // Clue Double-Sided Token"
+    dest:
+      - name: "Human Soldier"
+        collector_number: 3
+      - name: "Clue"
+        collector_number: 22
+  - source:
+      set_code: TINR
+      name: "Insect // Spider Double-Sided Token"
+    dest:
+      - name: "Insect"
+        collector_number: 15
+      - name: "Spider"
+        collector_number: 16
+  - source:
+      set_code: TINR
+      name: "Spirit // Human (0002) Double-Sided Token"
+    dest:
+      - name: "Spirit"
+        collector_number: 4
+      - name: "Human"
+        collector_number: 2
+  - source:
+      set_code: TINR
+      name: "Treefolk // Emblem - Wrenn and Seven Double-Sided Token"
+    dest:
+      - name: "Treefolk"
+        collector_number: 17
+      - name: "Wrenn and Seven Emblem"
+        collector_number: 27
+  - source:
+      set_code: TINR
+      name: "Wolf (0009) // Wolf (0018) Double-Sided Token"
+    dest:
+      - name: "Wolf"
+        collector_number: 9
+      - name: "Wolf"
+        collector_number: 18
+  - source:
+      set_code: TINR
+      name: "Zombie (0011) // Zombie (0012) Double-Sided Token"
+    dest:
+      - name: "Zombie"
+        collector_number: 11
+      - name: "Zombie"
+        collector_number: 12
+  - source:
+      set_code: TFIN
+      name: "Bird (0016) // Wizard (0014) Double-Sided Token"
+    dest:
+      - name: "Bird"
+        collector_number: 16
+      - name: "Wizard"
+        collector_number: 14
+  - source:
+      set_code: TFIN
+      name: "Bird (0017) // Wizard (0015) Double-Sided Token"
+    dest:
+      - name: "Bird"
+        collector_number: 17
+      - name: "Wizard"
+        collector_number: 15
+  - source:
+      set_code: TFIN
+      name: "Hero (0002) // Knight Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 2
+      - name: "Knight"
+        collector_number: 10
+  - source:
+      set_code: TFIN
+      name: "Hero (0003) // Copy (0001) Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 3
+      - name: "Copy"
+        collector_number: 1
+  - source:
+      set_code: TFIN
+      name: "Hero (0003) // Food Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 3
+      - name: "Food"
+        collector_number: 22
+  - source:
+      set_code: TFIN
+      name: "Hero (0003) // Treasure Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 3
+      - name: "Treasure"
+        collector_number: 23 # TODO: Verify this
+  - source:
+      set_code: TFIN
+      name: "Hero (0004) // Wizard (0015) Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 4
+      - name: "Wizard"
+        collector_number: 15
+  - source:
+      set_code: TFIN
+      name: "Hero (0005) // Food Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 5
+      - name: "Food"
+        collector_number: 22
+  - source:
+      set_code: TFIN
+      name: "Hero (0006) // Bird (0016) Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 6
+      - name: "Bird"
+        collector_number: 16
+  - source:
+      set_code: TFIN
+      name: "Hero (0006) // Treasure Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 6
+      - name: "Treasure"
+        collector_number: 23 # TODO: Verify this
+  - source:
+      set_code: TFIN
+      name: "Hero (0007) // Bird (0016) Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 7
+      - name: "Bird"
+        collector_number: 16
+  - source:
+      set_code: TFIN
+      name: "Hero (0007) // Treasure Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 7
+      - name: "Treasure"
+        collector_number: 23 # TODO: Verify this
+  - source:
+      set_code: TFIN
+      name: "Hero (0008) // Bird (0017) Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 8
+      - name: "Bird"
+        collector_number: 17
+  - source:
+      set_code: TFIN
+      name: "Hero (0008) // Robot Warrior (0012) Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 8
+      - name: "Robot Warrior"
+        collector_number: 12
+  - source:
+      set_code: TFIN
+      name: "Hero (0008) // Frog Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 8
+      - name: "Frog"
+        collector_number: 18
+  - source:
+      set_code: TFIN
+      name: "Hero (0008) // Robot Warrior (0012) Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 8
+      - name: "Robot Warrior"
+        collector_number: 12
+  - source:
+      set_code: TFIN
+      name: "Hero (0008) // Treasure Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 8
+      - name: "Treasure"
+        collector_number: 23 # TODO: Verify this
+  - source:
+      set_code: TFIN
+      name: "Hero (0009) // Treasure Double-Sided Token"
+    dest:
+      - name: "Hero"
+        collector_number: 9
+      - name: "Treasure"
+        collector_number: 23 # TODO: Verify this
+  - source:
+      set_code: TFDN
+      name: "Cat (0027) // Phyrexian Goblin Double-Sided Tokenn"
+    dest:
+      - name: "Cat"
+        collector_number: 27
+      - name: "Phyrexian Goblin"
+        collector_number: 31
+  - source:
+      set_code: TFDN
+      name: "Cat Beast // Dragon (0017) Double-Sided Token"
+    dest:
+      - name: "Cat Beast"
+        collector_number: 28
+      - name: "Dragon"
+        collector_number: 17
+  - source:
+      set_code: TFDN
+      name: "Copy // Human Double-Sided Token"
+    dest:
+      - name: "Copy"
+        collector_number: 26
+      - name: "Human"
+        collector_number: 3
+  - source:
+      set_code: TFDN
+      name: "Dog // Beast (0032) Double-Sided Token"
+    dest:
+      - name: "Dog"
+        collector_number: 29
+      - name: "Beast"
+        collector_number: 32
+  - source:
+      set_code: TFDN
+      name: "Dog // Beast (0033) Double-Sided Token"
+    dest:
+      - name: "Dog"
+        collector_number: 30
+      - name: "Beast"
+        collector_number: 33
+  - source:
+      set_code: TFDN
+      name: "Elf Warrior // Cat (001) Doubled-Sided Token"
+    dest:
+      - name: "Elf Warrior"
+        collector_number: 19
+      - name: "Cat"
+        collector_number: 1
+  - source:
+      set_code: TFDN
+      name: "Elf Warrior // Rat (0030) Double-Sided Token"
+    dest:
+      - name: "Elf Warrior"
+        collector_number: 19
+      - name: "Rat"
+        collector_number: 30
+  - source:
+      set_code: TFDN
+      name: "Faerie // Fish Doubled-Sided Token"
+    dest:
+      - name: "Faerie"
+        collector_number: 9
+      - name: "Fish"
+        collector_number: 10
+  - source:
+      set_code: TFDN
+      name: "Faerie // Zombie Double-Sided Token"
+    dest:
+      - name: "Faerie"
+        collector_number: 9
+      - name: "Zombie"
+        collector_number: 15
+  - source:
+      set_code: TFDN
+      name: "Goblin // Insect Doubled-Sided Token"
+    dest:
+      - name: "Goblin"
+        collector_number: 18
+      - name: "Insect"
+        collector_number: 21
+  - source:
+      set_code: TFDN
+      name: "Goblin // Treasure Double-Sided Token"
+    dest:
+      - name: "Goblin"
+        collector_number: 18
+      - name: "Treasure"
+        collector_number: 23
+  - source:
+      set_code: TFDN
+      name: "Goblin // Zombie Doubled-Sided Token"
+    dest:
+      - name: "Goblin"
+        collector_number: 18
+      - name: "Zombie"
+        collector_number: 15
+  - source:
+      set_code: TFDN
+      name: "Soldier // Faerie Double-Sided Token"
+    dest:
+      - name: "Soldier"
+        collector_number: 6
+      - name: "Faerie"
+        collector_number: 9
+  - source:
+      set_code: TECL
+      name: "Elf // Treasure Double-Sided Token"
+    dest:
+      - name: "Elf"
+        collector_number: 4
+      - name: "Treasure"
+        collector_number: 10
+  - source:
+      set_code: TECL
+      name: "Shapeshifter // Merfolk Double-Sided Token"
+    dest:
+      - name: "Shapeshifter"
+        collector_number: 1
+      - name: "Merfolk"
+        collector_number: 8
+  - source:
+      set_code: TECL
+      name: "Treefolk // Goblin Double-Sided Token"
+    dest:
+      - name: "Treefolk"
+        collector_number: 3
+      - name: "Goblin"
+        collector_number: 6
+  - source:
+      set_code: TECC
+      name: "Saproling // Poison Counter Double-Sided Token"
+    dest:
+      - name: "Saproling"
+        collector_number: 3
+      - name: "Poison Counter"
+        collector_number: 13
+  - source:
+      set_code: TECC
+      name: "Saproling // The Monarch Double-Sided Token"
+    dest:
+      - name: "Saproling"
+        collector_number: 3
+      - name: "The Monarch"
+        collector_number: 12
+  - source:
+      set_code: TECC
+      name: "Scarecrow // Treasure Double-Sided Token"
+    dest:
+      - name: "Scarecrow"
+        collector_number: 11
+      - name: "Treasure"
+        collector_number: 10
+        set_code: TECL
+  - source:
+      set_code: TECC
+      name: "Snake // Scarecrow Double-Sided Token"
+    dest:
+      - name: "Snake"
+        collector_number: 8
+      - name: "Scarecrow"
+        collector_number: 11
+  - source:
+      set_code: TECC
+      name: "Zombie // Elf Warrior Double-Sided Token"
+    dest:
+      - name: "Zombie"
+        collector_number: 3
+      - name: "Elf Warrior"
+        collector_number: 4
+  - source:
+      set_code: TC19
+      name: "Emblem - Ob Nixilis Reignited // Zombie (010) Double-sided Token"
+    dest:
+      - name: "Ob Nixilis Reignited Emblem"
+        collector_number: 29
+      - name: "Zombie"
+        collector_number: 10
+  - source:
+      set_code: TC19
+      name: "Zombie (010) // Zombie (011) Double-sided Token"
+    dest:
+      - name: "Zombie"
+        collector_number: 10
+      - name: "Zombie"
+        collector_number: 11
+  - source:
+      set_code: VOW
+      collector_number: 341
+    dest:
+      - name: "Dracula the Voyager"
+  - source:
+      set_code: VOW
+      collector_number: 332
+    dest:
+      - name: "Jonathan Harker"
+  - source:
+      set_code: VOW
+      collector_number: 339
+    dest:
+      - name: "Mysterious Blood Illness"

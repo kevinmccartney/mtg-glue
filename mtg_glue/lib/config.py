@@ -29,6 +29,4 @@ def load_config(path: Path | None = None) -> Config:
         **user_config.model_dump(),
     }
 
-    print()
-
     return Config.model_validate(merged)

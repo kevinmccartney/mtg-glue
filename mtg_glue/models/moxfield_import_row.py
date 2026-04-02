@@ -13,7 +13,7 @@ validation_alias choices below should still match.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, Optional, ClassVar
 
 from pydantic import (
     AliasChoices,
@@ -41,11 +41,37 @@ class MoxfieldImportRow(BaseModel):
         validate_assignment=True,
     )
 
+    EXPORT_FIELDNAMES: ClassVar[list[str]] = [
+        "Count",
+        "Tradelist Count",
+        "Name",
+        "Edition",
+        "Condition",
+        "Language",
+        "Foil",
+        "Tags",
+        "Last Modified",
+        "Collector Number",
+        "Alter",
+        "Proxy",
+        "Purchase Price",
+    ]
+
     count: Annotated[
         int,
         Field(
             gt=0,
             validation_alias=AliasChoices("Quantity", "Count"),
+            serialization_alias="Count",
+        ),
+    ]
+    tradelist_count: Annotated[
+        int,
+        Field(
+            ge=0,
+            default=0,
+            validation_alias=AliasChoices("Tradelist Count", "TradelistCount"),
+            serialization_alias="Tradelist Count",
         ),
     ]
     name: Annotated[
@@ -53,30 +79,60 @@ class MoxfieldImportRow(BaseModel):
         Field(
             min_length=1,
             validation_alias=AliasChoices("Name", "Card Name"),
+            serialization_alias="Name",
         ),
     ]
     edition: Optional[str] = Field(
         default=None,
-        validation_alias=AliasChoices("Set Code", "Set", "Edition"),
+        validation_alias=AliasChoices("Edition", "Set Code", "Set"),
         description="Three-letter set code if provided by Moxfield.",
+        serialization_alias="Edition",
     )
     condition: Condition = Field(
         default="NM",
         validation_alias=AliasChoices("Condition"),
+        serialization_alias="Condition",
     )
     language: str = Field(
         default="English",
         validation_alias=AliasChoices("Language", "Lang"),
+        serialization_alias="Language",
     )
     foil: Finish = Field(
         default=None,
-        validation_alias=AliasChoices("Printing", "Finish"),
+        validation_alias=AliasChoices("Foil", "Printing", "Finish"),
+        serialization_alias="Foil",
     )
     collector_number: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("Collector Number", "Number"),
+        serialization_alias="Collector Number",
     )
-    alter: bool = Field(default=False, validation_alias=AliasChoices("Altered"))
+    alter: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("Altered", "Alter"),
+        serialization_alias="Alter",
+    )
+    proxy: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("Proxy"),
+        serialization_alias="Proxy",
+    )
+    tags: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("Tags"),
+        serialization_alias="Tags",
+    )
+    last_modified: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("Last Modified", "LastModified"),
+        serialization_alias="Last Modified",
+    )
+    purchase_price: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("Purchase Price", "PurchasePrice"),
+        serialization_alias="Purchase Price",
+    )
 
     @field_validator(
         "alter",
