@@ -27,5 +27,6 @@ __pycache__/
 *.pdb
 *.egg-info/
 .venv/
+.env
 .env/
 .mypy_cache/

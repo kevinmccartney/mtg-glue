@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TypedDict, Union
+from typing import Union
+from typing_extensions import TypedDict
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
