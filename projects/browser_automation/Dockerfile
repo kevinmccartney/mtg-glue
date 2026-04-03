@@ -9,6 +9,8 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry install --no-root --no-interaction
 
 COPY projects/cli ./cli
+COPY projects/lib ./lib
+COPY projects/models ./models
 COPY projects/browser_automation ./browser_automation
 
 CMD ["python", "-m", "browser_automation.hello_world"]

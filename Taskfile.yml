@@ -1,0 +1,84 @@
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  BOOTSTRAP_DIR: projects/infra/bootstrap
+  MTG_GLUE_DIR: projects/infra/mtg_glue
+
+tasks:
+  env:info:
+    desc: Show the Poetry virtualenv path and Python location
+    cmds:
+      - poetry env info
+
+  env:aws-export:
+    desc: 'Export AWS SSO credentials — run as: eval "$(task env:aws-export)"'
+    silent: true
+    cmds:
+      - aws configure export-credentials --profile default --format env
+
+  browser:build:
+    desc: Build the browser automation Docker image
+    cmds:
+      - docker compose build browser-glue
+
+  browser:run:
+    desc: Run the browser automation container
+    cmds:
+      - docker compose run --rm browser-glue
+
+  infra:init:bootstrap:
+    desc: Initialise the bootstrap Terraform workspace (local state)
+    cmds:
+      - terraform -chdir={{.BOOTSTRAP_DIR}} init
+
+  infra:plan:bootstrap:
+    desc: Plan the bootstrap workspace (reads TF_STATE_BUCKET and AWS_REGION from .env)
+    vars:
+      REGION: '{{.AWS_REGION | default "us-east-1"}}'
+    cmds:
+      - terraform -chdir={{.BOOTSTRAP_DIR}} plan
+          -var="state_bucket_name={{.TF_STATE_BUCKET}}"
+          -var="aws_region={{.REGION}}"
+
+  infra:apply:bootstrap:
+    desc: Apply the bootstrap workspace (reads TF_STATE_BUCKET and AWS_REGION from .env)
+    vars:
+      REGION: '{{.AWS_REGION | default "us-east-1"}}'
+    cmds:
+      - terraform -chdir={{.BOOTSTRAP_DIR}} apply
+          -var="state_bucket_name={{.TF_STATE_BUCKET}}"
+          -var="aws_region={{.REGION}}"
+          -auto-approve
+
+  infra:init:mtg-glue:
+    desc: Initialise the mtg_glue workspace with the remote S3 backend (reads TF_STATE_BUCKET and AWS_REGION from .env)
+    vars:
+      REGION: '{{.AWS_REGION | default "us-east-1"}}'
+    cmds:
+      - terraform -chdir={{.MTG_GLUE_DIR}} init
+          -backend-config="bucket={{.TF_STATE_BUCKET}}"
+          -backend-config="region={{.REGION}}"
+          -backend-config="dynamodb_table=terraform-state-locks"
+
+  infra:plan:mtg-glue:
+    desc: Plan the mtg_glue workspace (reads email and region from .env)
+    vars:
+      REGION: '{{.AWS_REGION | default "us-east-1"}}'
+    cmds:
+      - terraform -chdir={{.MTG_GLUE_DIR}} plan
+          -var="aws_region={{.REGION}}"
+          -var="notification_sender_email={{.NOTIFICATION_SENDER_EMAIL}}"
+          -var="notification_recipient_email={{.NOTIFICATION_RECIPIENT_EMAIL}}"
+
+  infra:apply:mtg-glue:
+    desc: Apply the mtg_glue workspace (reads email and region from .env)
+    vars:
+      REGION: '{{.AWS_REGION | default "us-east-1"}}'
+    cmds:
+      - terraform -chdir={{.MTG_GLUE_DIR}} apply
+          -var="aws_region={{.REGION}}"
+          -var="notification_sender_email={{.NOTIFICATION_SENDER_EMAIL}}"
+          -var="notification_recipient_email={{.NOTIFICATION_RECIPIENT_EMAIL}}"
+          -auto-approve
