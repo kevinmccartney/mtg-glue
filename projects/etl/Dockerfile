@@ -23,10 +23,10 @@ RUN poetry install --no-root --no-interaction
 COPY projects/cli ./cli
 COPY projects/lib ./lib
 COPY projects/models ./models
-COPY projects/browser_automation ./browser_automation
-RUN chmod +x /app/browser_automation/docker-entrypoint.sh
+COPY projects/etl ./etl
+RUN chmod +x /app/etl/docker-entrypoint.sh
 
 ENV PYTHONUNBUFFERED=1
 ENV CAPSOLVER_EXTENSION_PATH=/opt/capsolver-extension
 
-ENTRYPOINT ["/app/browser_automation/docker-entrypoint.sh"]
+ENTRYPOINT ["/app/etl/docker-entrypoint.sh"]

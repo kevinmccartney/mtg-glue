@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Download and unpack the CapSolver Chrome extension into .data (gitignored).
-# Keep CAPSOLVER_* in sync with projects/browser_automation/Dockerfile.
+# Keep CAPSOLVER_* in sync with projects/etl/Dockerfile.
 
 set -euo pipefail
 

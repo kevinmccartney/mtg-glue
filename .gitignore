@@ -8,6 +8,9 @@
 .env
 .env/
 
+# local YAML config (use S3 in AWS; keep a private copy or config.yaml.example)
+/config.yaml
+
 # terraform
 .terraform/
 *.tfstate

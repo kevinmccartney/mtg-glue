@@ -5,6 +5,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from models import (
+    Config,
     EchoMtgExportRow,
     MoxfieldImportRow,
 )
@@ -17,39 +18,12 @@ from lib.filters import apply_filter_rules
 from lib.reporters import write_moxfield_reports
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Convert EchoMTG export CSV into Moxfield import CSV."
-    )
-    parser.add_argument(
-        "--min-date",
-        help="Only include rows with Date Acquired on/after this date "
-        "(YYYY-MM-DD or MM/DD/YYYY).",
-        default=None,
-    )
-    parser.add_argument(
-        "--input",
-        default=".data/echomtg-export.csv",
-        help="Path to EchoMTG export CSV (default: .data/echomtg-export.csv)",
-    )
-    parser.add_argument(
-        "--output",
-        default=".out/moxfield-import.csv",
-        help="Path for Moxfield import CSV (default: .out/moxfield-import.csv)",
-    )
-    parser.add_argument(
-        "--config",
-        default=str(DEFAULT_CONFIG_PATH),
-        help="Path to config YAML (default: .data/config.yaml)",
-    )
-
-    args = parser.parse_args()
-
-    input_path = Path(args.input).expanduser()
-    output_path = Path(args.output).expanduser()
-    config_path = Path(args.config).expanduser()
-    config = load_config(config_path)
-
+def convert_echo_export_to_moxfield(
+    config: Config,
+    input_path: Path,
+    output_path: Path,
+) -> int:
+    """Run EchoMTG CSV → Moxfield import CSV using the given merged config."""
     if not input_path.exists():
         print(f"Input file not found: {input_path}")
         return 1
@@ -78,7 +52,6 @@ def main() -> int:
             rewritten_row = apply_rewrite_rules(mapped_row, config.rewrite_rules)
             out_rows.extend(echo_to_moxfield_rows(rewritten_row))
 
-    # Add manually tracked rows from config.
     for manual in config.manually_tracked:
         out_rows.append(manual_to_moxfield_row(manual))
 
@@ -88,6 +61,43 @@ def main() -> int:
     for result in report_results:
         print(f"Wrote {result['rows']} rows to {result['path']}")
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Convert EchoMTG export CSV into Moxfield import CSV."
+    )
+    parser.add_argument(
+        "--min-date",
+        help="Only include rows with Date Acquired on/after this date "
+        "(YYYY-MM-DD or MM/DD/YYYY).",
+        default=None,
+    )
+    parser.add_argument(
+        "--input",
+        default=".data/echomtg-export.csv",
+        help="Path to EchoMTG export CSV (default: .data/echomtg-export.csv)",
+    )
+    parser.add_argument(
+        "--output",
+        default=".out/moxfield-import.csv",
+        help="Path for Moxfield import CSV (default: .out/moxfield-import.csv)",
+    )
+    parser.add_argument(
+        "--config",
+        default=str(DEFAULT_CONFIG_PATH),
+        metavar="PATH",
+        help="Path to config YAML (default: ./config.yaml).",
+    )
+
+    args = parser.parse_args()
+
+    input_path = Path(args.input).expanduser()
+    output_path = Path(args.output).expanduser()
+    config_path = Path(args.config).expanduser()
+    config = load_config(config_path)
+
+    return convert_echo_export_to_moxfield(config, input_path, output_path)
 
 
 if __name__ == "__main__":

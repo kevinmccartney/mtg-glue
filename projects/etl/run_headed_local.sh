@@ -7,14 +7,14 @@
 #   - .env with the same variables as Docker (ECHOMTG_*, MOXFIELD_*, CAPSOLVER_API_KEY, S3_BUCKET, AWS_*, etc.)
 #   - CapSolver extension: defaults to .data/capsolver-extension (downloaded automatically on first run).
 #     To refresh or install without running the sync:
-#       ./projects/browser_automation/fetch_capsolver_extension.sh
+#       ./projects/etl/fetch_capsolver_extension.sh
 #
 # Optional:
 #   ECHO_MTG_HEADED=1   also show a window for the EchoMTG export step (default is headless for that part).
 #
 # Usage (from anywhere):
-#   ./projects/browser_automation/run_headed_local.sh
-#   ./projects/browser_automation/run_headed_local.sh --   # extra args forwarded to Python if added later
+#   ./projects/etl/run_headed_local.sh
+#   ./projects/etl/run_headed_local.sh --   # extra args forwarded to Python if added later
 #
 # If you see "ValueError: bad marshal data (unknown type code)" on import, stale .pyc
 # files do not match your current Python. From repo root run:
@@ -42,4 +42,4 @@ if ! command -v poetry >/dev/null 2>&1; then
   exit 1
 fi
 
-exec poetry run python -u -m browser_automation.echo_moxfield_etl "$@"
+exec poetry run python -u -m etl.echo_moxfield_etl "$@"

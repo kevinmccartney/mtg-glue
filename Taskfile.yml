@@ -18,16 +18,16 @@ tasks:
     cmds:
       - aws configure export-credentials --profile default --format env
 
-  browser:build:
-    desc: Build the browser automation Docker image
+  etl:build:
+    desc: Build the ETL Docker image
     cmds:
-      - docker compose build browser-glue
+      - docker compose build etl
 
-  browser:run:
-    desc: Run the browser automation container
+  etl:run:
+    desc: Run the ETL container (interactive shell)
     cmds:
       # -T avoids a TTY so logs stream immediately and nothing blocks on stdin.
-      - docker compose run -T --rm browser-glue
+      - docker compose run -T --rm etl
 
   moxfield:import:
     desc: Convert EchoMTG export CSV to Moxfield import CSV (extra flags after --)
@@ -50,8 +50,8 @@ tasks:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
       - terraform -chdir={{.BOOTSTRAP_DIR}} plan
-          -var="state_bucket_name={{.TF_STATE_BUCKET}}"
-          -var="aws_region={{.REGION}}"
+        -var="state_bucket_name={{.TF_STATE_BUCKET}}"
+        -var="aws_region={{.REGION}}"
 
   infra:apply:bootstrap:
     desc: Apply the bootstrap workspace (reads TF_STATE_BUCKET and AWS_REGION from .env)
@@ -59,9 +59,9 @@ tasks:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
       - terraform -chdir={{.BOOTSTRAP_DIR}} apply
-          -var="state_bucket_name={{.TF_STATE_BUCKET}}"
-          -var="aws_region={{.REGION}}"
-          -auto-approve
+        -var="state_bucket_name={{.TF_STATE_BUCKET}}"
+        -var="aws_region={{.REGION}}"
+        -auto-approve
 
   infra:init:mtg-glue:
     desc: Initialise the mtg_glue workspace with the remote S3 backend (reads TF_STATE_BUCKET and AWS_REGION from .env)
@@ -69,9 +69,9 @@ tasks:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
       - terraform -chdir={{.MTG_GLUE_DIR}} init
-          -backend-config="bucket={{.TF_STATE_BUCKET}}"
-          -backend-config="region={{.REGION}}"
-          -backend-config="dynamodb_table=terraform-state-locks"
+        -backend-config="bucket={{.TF_STATE_BUCKET}}"
+        -backend-config="region={{.REGION}}"
+        -backend-config="dynamodb_table=terraform-state-locks"
 
   infra:plan:mtg-glue:
     desc: Plan the mtg_glue workspace (reads email and region from .env)
@@ -79,9 +79,9 @@ tasks:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
       - terraform -chdir={{.MTG_GLUE_DIR}} plan
-          -var="aws_region={{.REGION}}"
-          -var="notification_sender_email={{.NOTIFICATION_SENDER_EMAIL}}"
-          -var="notification_recipient_email={{.NOTIFICATION_RECIPIENT_EMAIL}}"
+        -var="aws_region={{.REGION}}"
+        -var="notification_sender_email={{.NOTIFICATION_SENDER_EMAIL}}"
+        -var="notification_recipient_email={{.NOTIFICATION_RECIPIENT_EMAIL}}"
 
   infra:apply:mtg-glue:
     desc: Apply the mtg_glue workspace (reads email and region from .env)
@@ -89,7 +89,32 @@ tasks:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
       - terraform -chdir={{.MTG_GLUE_DIR}} apply
-          -var="aws_region={{.REGION}}"
-          -var="notification_sender_email={{.NOTIFICATION_SENDER_EMAIL}}"
-          -var="notification_recipient_email={{.NOTIFICATION_RECIPIENT_EMAIL}}"
-          -auto-approve
+        -var="aws_region={{.REGION}}"
+        -var="notification_sender_email={{.NOTIFICATION_SENDER_EMAIL}}"
+        -var="notification_recipient_email={{.NOTIFICATION_RECIPIENT_EMAIL}}"
+        -auto-approve
+
+  infra:validate:mtg-glue:
+    desc: Validate mtg_glue Terraform (no remote state required)
+    cmds:
+      - terraform -chdir={{.MTG_GLUE_DIR}} init -backend=false -input=false
+      - terraform -chdir={{.MTG_GLUE_DIR}} validate
+
+  etl:push-ecr:
+    desc: Build local image, tag :latest, push to ECR (task infra:apply:mtg-glue first)
+    vars:
+      REGION: '{{.AWS_REGION | default "us-east-1"}}'
+    cmds:
+      - docker compose build etl
+      - |
+        set -e
+        REPO="$(terraform -chdir={{.MTG_GLUE_DIR}} output -raw etl_ecr_repository_url)"
+        REGISTRY="${REPO%%/*}"
+        aws ecr get-login-password --region "{{.REGION}}" | docker login --username AWS --password-stdin "$REGISTRY"
+        docker tag mtg-glue-etl:local "${REPO}:latest"
+        docker push "${REPO}:latest"
+
+  etl:smoke-run:
+    desc: Print one-line aws ecs run-task example from Terraform (after apply + push + secrets)
+    cmds:
+      - terraform -chdir={{.MTG_GLUE_DIR}} output -raw etl_manual_run_cli_example

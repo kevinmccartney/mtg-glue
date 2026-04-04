@@ -14,3 +14,26 @@ variable "notification_sender_email" {
   type        = string
 }
 
+variable "etl_schedule_expression" {
+  description = "EventBridge schedule for the mtg-glue ETL ECS task (UTC)."
+  type        = string
+  default     = "cron(0 6 * * ? *)"
+}
+
+variable "etl_schedule_enabled" {
+  description = "Whether the EventBridge ETL schedule is ENABLED."
+  type        = bool
+  default     = true
+}
+
+variable "etl_cpu" {
+  description = "Fargate CPU units for ETL task (e.g. 1024, 2048)."
+  type        = number
+  default     = 2048
+}
+
+variable "etl_memory" {
+  description = "Fargate memory (MiB) for ETL task; must pair with CPU."
+  type        = number
+  default     = 4096
+}

@@ -12,7 +12,8 @@ from typing import Any
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
-from cli.echo_mtg_to_moxfield import main as run_moxfield_import
+from cli.echo_mtg_to_moxfield import convert_echo_export_to_moxfield
+from lib.config import load_etl_runtime_config
 from lib.diff import (
     format_moxfield_inventory_diff,
     parse_moxfield_card_counts,
@@ -402,7 +403,12 @@ def _run(
     upload_file_to_s3(s3_bucket, EXPORT_PATH, echomtg_key)
 
     print("[8/12] Running Moxfield import pipeline...")
-    exit_code = run_moxfield_import()
+    etl_config = load_etl_runtime_config()
+    exit_code = convert_echo_export_to_moxfield(
+        etl_config,
+        EXPORT_PATH,
+        OUT_DIR / "moxfield-import.csv",
+    )
     if exit_code != 0:
         raise RuntimeError("Moxfield import pipeline exited with a non-zero status.")
 
