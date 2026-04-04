@@ -1,0 +1,549 @@
+import json
+import os
+import re
+import shutil
+import tempfile
+import time
+import traceback
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from dotenv import load_dotenv
+from playwright.sync_api import sync_playwright
+
+from cli.echo_mtg_to_moxfield import main as run_moxfield_import
+from lib.diff import (
+    format_moxfield_inventory_diff,
+    parse_moxfield_card_counts,
+)
+from lib.s3 import (
+    boto_client,
+    fetch_latest_moxfield_import_csv,
+    upload_file_to_s3,
+)
+
+load_dotenv()
+
+EXPORT_PATH = Path(".data/echomtg-export.csv")
+OUT_DIR = Path(".out")
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def send_notification(sender: str, recipient: str, subject: str, body: str) -> None:
+    ses = boto_client("ses")
+    ses.send_email(
+        Source=sender,
+        Destination={"ToAddresses": [recipient]},
+        Message={
+            "Subject": {"Data": subject},
+            "Body": {"Text": {"Data": body}},
+        },
+    )
+    print(f"      -> notification sent to {recipient}")
+
+
+def _capsolver_extension_dir() -> Path:
+    return Path(os.environ.get("CAPSOLVER_EXTENSION_PATH", "/opt/capsolver-extension"))
+
+
+def _wait_and_click_moxfield_sign_in(page: Any, timeout_s: float = 120.0) -> None:
+    """Wait for a visible, enabled Sign In button, then click it.
+
+    Moxfield can render more than one node that matches the label; the first in
+    document order may stay ``disabled`` while the real form button is enabled.
+    A single ``.find()`` on the first match then blocks forever.
+    """
+    sign_in = page.get_by_role("button", name=re.compile(r"^sign in$", re.I))
+    sign_in.first.wait_for(state="visible", timeout=30_000)
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        n = sign_in.count()
+        for i in range(n):
+            btn = sign_in.nth(i)
+            if btn.is_visible() and btn.is_enabled():
+                page.screenshot(path=".data/debug-moxfield-08-pre-sign-in.png")
+                btn.click()
+                return
+        page.wait_for_timeout(200)
+    raise TimeoutError("Moxfield Sign In did not become enabled")
+
+
+def _patch_capsolver_extension_config(api_key: str) -> None:
+    """Write CapSolver API key into the unpacked extension's assets/config.js."""
+    config_path = _capsolver_extension_dir() / "assets" / "config.js"
+    if not config_path.is_file():
+        raise FileNotFoundError(
+            f"CapSolver extension not found at {config_path}. "
+            "Set CAPSOLVER_EXTENSION_PATH or use the Docker image."
+        )
+    text = config_path.read_text(encoding="utf-8")
+    text = re.sub(
+        r"apiKey:\s*'[^']*'",
+        f"apiKey: {json.dumps(api_key)}",
+        text,
+        count=1,
+    )
+    # Solve after username/password so Turnstile tokens stay fresh (extension v1.16+).
+    text = re.sub(
+        r"manualSolving:\s*\w+",
+        "manualSolving: true",
+        text,
+        count=1,
+    )
+    config_path.write_text(text, encoding="utf-8")
+
+
+def _collect_moxfield_import_errors(page: Any) -> list[str]:
+    """Expand the import error panel if present and return one string per row error."""
+    danger = page.locator("div.alert.alert-danger").filter(
+        has_text=re.compile(r"Errors found during import", re.I)
+    )
+    if danger.count() == 0:
+        return []
+    details = danger.first.locator("details")
+    if details.count() == 0:
+        return []
+    d0 = details.first
+    if d0.get_attribute("open") is None:
+        d0.locator("summary").click()
+    container = d0.locator("div.pt-3.ps-3")
+    container.wait_for(state="visible", timeout=15_000)
+    errors: list[str] = []
+    for row in container.locator("> div").all():
+        text = row.inner_text().strip()
+        if text:
+            errors.append(text)
+    return errors
+
+
+def _wait_for_completed_download_file(
+    downloads_dir: Path,
+    seen_before: set[Path],
+    timeout_s: float,
+) -> Path:
+    """
+    Poll for a new file in downloads_dir until size is stable
+    (Chrome .crdownload finished).
+    """
+    deadline = time.monotonic() + timeout_s
+    poll_s = 0.25
+    while time.monotonic() < deadline:
+        try:
+            entries = list(downloads_dir.iterdir())
+        except OSError:
+            time.sleep(poll_s)
+            continue
+        entries.sort(
+            key=lambda p: p.stat().st_mtime if p.exists() else 0.0, reverse=True
+        )
+        for path in entries:
+            if path.name.endswith(".crdownload") or path.name.endswith(".tmp"):
+                continue
+            try:
+                resolved = path.resolve()
+            except OSError:
+                continue
+            if resolved in seen_before:
+                continue
+            try:
+                sz1 = path.stat().st_size
+            except OSError:
+                continue
+            if sz1 == 0:
+                continue
+            time.sleep(poll_s * 2)
+            try:
+                sz2 = path.stat().st_size
+            except OSError:
+                continue
+            if sz1 == sz2:
+                return resolved
+        time.sleep(poll_s)
+    raise TimeoutError(
+        f"No new download file in {downloads_dir} within {timeout_s:.0f}s"
+    )
+
+
+def _moxfield_login_with_capsolver_extension(
+    playwright: Any,
+    username: str,
+    password: str,
+    api_key: str,
+    moxfield_csv_path: Path,
+    moxfield_export_path: Path,
+) -> list[str]:
+    """
+    Log into Moxfield with the CapSolver Chrome extension (CapSolver + Playwright).
+    """
+    _patch_capsolver_extension_config(api_key)
+    ext = str(_capsolver_extension_dir().resolve())
+    user_data = tempfile.mkdtemp(prefix="pw-capsolver-")
+    downloads_dir = Path(tempfile.mkdtemp(prefix="pw-moxfield-dl-"))
+    context: Any = None
+    try:
+        context = playwright.chromium.launch_persistent_context(
+            user_data,
+            headless=False,
+            downloads_path=str(downloads_dir),
+            args=[
+                f"--disable-extensions-except={ext}",
+                f"--load-extension={ext}",
+                "--lang=en-US",
+            ],
+            viewport={"width": 1280, "height": 720},
+            user_agent=(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+            ),
+        )
+        page = context.pages[0] if context.pages else context.new_page()
+
+        def _on_captcha_solved() -> None:
+            print("      -> CapSolver: captchaSolvedCallback")
+
+        page.expose_function("captchaSolvedCallback", _on_captcha_solved)
+
+        print("  [moxfield] Navigating to sign-in...")
+        page.goto("https://moxfield.com/account/signin?redirect=/collection")
+        page.wait_for_load_state("domcontentloaded")
+        page.screenshot(path=".data/debug-moxfield-01-page-load.png")
+
+        print("  [moxfield] Waiting for login form...")
+        page.locator("input#username").wait_for(state="visible", timeout=30_000)
+        page.screenshot(path=".data/debug-moxfield-02-login-form.png")
+
+        page.locator("input#username").fill(username)
+        page.locator("input#password").fill(password)
+        page.screenshot(path=".data/debug-moxfield-03-credentials-filled.png")
+        print("      -> credentials filled")
+
+        print("  [moxfield] Waiting for Sign In to enable...")
+        _wait_and_click_moxfield_sign_in(page)
+
+        print("  [moxfield] Waiting for collection URL...")
+        page.wait_for_url(
+            re.compile(r"https://(www\.)?moxfield\.com/collection/?(\?.*)?(#.*)?$"),
+            timeout=60_000,
+        )
+        print(f"      -> landed on: {page.url}")
+
+        moxfield_export_path.parent.mkdir(parents=True, exist_ok=True)
+
+        print('  [moxfield] Waiting for #maincontent a "More"...')
+        more = page.locator("#maincontent a").filter(has_text=re.compile(r"^More$"))
+        more.wait_for(state="visible", timeout=30_000)
+        page.screenshot(path=".data/debug-moxfield-09-collection-more.png")
+        more.click()
+
+        print("  [moxfield] Exporting collection CSV (before delete)...")
+        export_link = page.locator(".dropdown-menu a.dropdown-item").filter(
+            has_text=re.compile(r"^Export CSV$")
+        )
+        export_link.wait_for(state="visible", timeout=15_000)
+        seen_downloads = {p.resolve() for p in downloads_dir.iterdir()}
+        export_link.click()
+        print("  [moxfield] Waiting for export file in downloads directory...")
+        finished = _wait_for_completed_download_file(
+            downloads_dir, seen_downloads, timeout_s=120.0
+        )
+        shutil.copy2(finished, moxfield_export_path)
+        print(
+            f"      -> saved Moxfield collection export ({finished.name} → "
+            f"{moxfield_export_path.name})"
+        )
+
+        print("  [moxfield] Opening More → Delete Entire Collection...")
+        more = page.locator("#maincontent a").filter(has_text=re.compile(r"^More$"))
+        more.wait_for(state="visible", timeout=30_000)
+        more.click()
+
+        print("  [moxfield] Choosing Delete Entire Collection...")
+        delete_item = page.locator(".dropdown-menu a.dropdown-item").filter(
+            has_text=re.compile(r"^Delete Entire Collection$")
+        )
+        delete_item.wait_for(state="visible", timeout=15_000)
+        delete_item.click()
+
+        print("  [moxfield] Confirming delete modal...")
+        confirm_input = page.locator(".modal-content input")
+        confirm_input.wait_for(state="visible", timeout=30_000)
+        confirm_input.fill("ENTIRE")
+        page.screenshot(path=".data/debug-moxfield-10-delete-modal.png")
+
+        delete_btn = page.locator(".modal-footer button").filter(
+            has_text=re.compile(r"^Permanently Delete$")
+        )
+        delete_btn.wait_for(state="visible", timeout=15_000)
+        delete_btn.click()
+        print("      -> submitted Permanently Delete")
+
+        if not moxfield_csv_path.is_file():
+            raise FileNotFoundError(
+                f"Moxfield import CSV not found: {moxfield_csv_path.resolve()}"
+            )
+
+        print("  [moxfield] Opening More → Import CSV...")
+        more = page.locator("#maincontent a").filter(has_text=re.compile(r"^More$"))
+        more.wait_for(state="visible", timeout=120_000)
+        more.click()
+        import_link = page.locator(".dropdown-menu a.dropdown-item").filter(
+            has_text=re.compile(r"^Import CSV$")
+        )
+        import_link.wait_for(state="visible", timeout=15_000)
+        import_link.click()
+
+        print("  [moxfield] Uploading import CSV...")
+        file_input = page.locator("input#filename")
+        file_input.wait_for(state="attached", timeout=30_000)
+        file_input.set_input_files(str(moxfield_csv_path.resolve()))
+        page.screenshot(path=".data/debug-moxfield-11-import-modal.png")
+
+        submit_btn = page.locator(".modal-footer button").filter(
+            has_text=re.compile(r"^Import$")
+        )
+        submit_btn.wait_for(state="visible", timeout=15_000)
+        submit_modal = page.locator("div.modal").filter(
+            has=page.locator("input#filename")
+        )
+        submit_btn.click()
+
+        print("  [moxfield] Waiting for import modal to close...")
+        submit_modal.wait_for(state="hidden", timeout=300_000)
+
+        print("  [moxfield] Waiting for import success alert...")
+        page.locator(".alert.alert-success").filter(
+            has_text=re.compile(r"Successfully imported your collection\.")
+        ).wait_for(state="visible", timeout=300_000)
+        page.screenshot(path=".data/debug-moxfield-12-import-success.png")
+        print("      -> collection import completed")
+        import_errors: list[str] = []
+        try:
+            import_errors = _collect_moxfield_import_errors(page)
+        except Exception as exc:
+            print(f"      -> warning: could not read Moxfield import errors: {exc}")
+        if import_errors:
+            print(
+                f"      -> Moxfield reported {len(import_errors)} import row error(s)"
+            )
+            page.screenshot(path=".data/debug-moxfield-13-import-errors.png")
+        return import_errors
+    finally:
+        if context is not None:
+            context.close()
+        shutil.rmtree(user_data, ignore_errors=True)
+        shutil.rmtree(downloads_dir, ignore_errors=True)
+
+
+def _run(
+    username: str,
+    password: str,
+    s3_bucket: str,
+    timestamp: str,
+    moxfield_username: str,
+    moxfield_password: str,
+    capsolver_api_key: str,
+) -> tuple[str, list[str]]:
+    """
+    Run the full sync; return
+    (email body, Moxfield row errors — non-empty means failure).
+    """
+    print("[sync] starting EchoMTG + pipeline (Playwright next)...", flush=True)
+    echo_headed = _env_truthy("ECHO_MTG_HEADED")
+    with sync_playwright() as p:
+        print("[sync] launching Chromium for EchoMTG...", flush=True)
+        browser = p.chromium.launch(headless=not echo_headed)
+        page = browser.new_page()
+
+        print("[1/6] Navigating to login page...")
+        page.goto("https://www.echomtg.com/login/")
+
+        print("[2/6] Filling login form...")
+        page.fill("input[placeholder='Enter your email']", username)
+        page.fill("input[placeholder='Enter your password']", password)
+        page.get_by_role("button", name="Sign in").click()
+
+        print("[3/6] Waiting for dashboard...")
+        page.wait_for_url("https://www.echomtg.com/dashboard/")
+        print(f"      -> landed on: {page.url}")
+
+        print("[4/6] Navigating to collection app...")
+        page.goto("https://www.echomtg.com/apps/collection/")
+        page.wait_for_load_state("networkidle")
+
+        print("[5/6] Clicking Export to open submenu...")
+        page.get_by_role("button", name="Export").click()
+
+        inventory_csv_option = page.locator(
+            "div.n-dropdown-option[data-dropdown-option='true']",
+            has_text="Inventory CSV",
+        )
+        inventory_csv_option.wait_for(state="visible")
+        print("      -> submenu visible, clicking 'Inventory CSV'...")
+
+        with page.expect_download(timeout=60_000) as download_info:
+            inventory_csv_option.click()
+
+        download = download_info.value
+        download.save_as(str(EXPORT_PATH))
+        print(f"[6/6] Downloaded: {download.suggested_filename}")
+
+        browser.close()
+
+    echomtg_key = f"echomtg/echomtg-export-{timestamp}.csv"
+    moxfield_key = f"moxfield/moxfield-import-{timestamp}.csv"
+    moxfield_export_key = f"moxfield/moxfield-collection-export-{timestamp}.csv"
+    moxfield_export_path = Path(".data") / f"moxfield-collection-export-{timestamp}.csv"
+
+    print(f"[7/12] Uploading EchoMTG export to s3://{s3_bucket}/echomtg/...")
+    upload_file_to_s3(s3_bucket, EXPORT_PATH, echomtg_key)
+
+    print("[8/12] Running Moxfield import pipeline...")
+    exit_code = run_moxfield_import()
+    if exit_code != 0:
+        raise RuntimeError("Moxfield import pipeline exited with a non-zero status.")
+
+    moxfield_csv = OUT_DIR / "moxfield-import.csv"
+    new_csv_text = moxfield_csv.read_text(encoding="utf-8")
+
+    print("[9/12] Computing diff against previous Moxfield import in S3...")
+    previous = fetch_latest_moxfield_import_csv(s3_bucket)
+    if previous:
+        prev_key, prev_csv_text = previous
+        print(f"      -> comparing against {prev_key}")
+        prev_ts = prev_key.removeprefix("moxfield/moxfield-import-").removesuffix(
+            ".csv"
+        )
+        diff_text = format_moxfield_inventory_diff(
+            parse_moxfield_card_counts(prev_csv_text),
+            parse_moxfield_card_counts(new_csv_text),
+            f"Diff vs prior run ({prev_ts})",
+        )
+        print(diff_text)
+    else:
+        print("      -> no previous Moxfield import in S3, skipping run-over-run diff")
+        diff_text = (
+            "No previous Moxfield import in S3 — this is the first sync "
+            "(run-over-run diff skipped)."
+        )
+
+    print(f"[10/12] Uploading Moxfield import to s3://{s3_bucket}/moxfield/...")
+    upload_file_to_s3(s3_bucket, moxfield_csv, moxfield_key)
+
+    print("[11/12] Logging into Moxfield (CapSolver extension)...")
+    with sync_playwright() as p:
+        moxfield_import_errors = _moxfield_login_with_capsolver_extension(
+            p,
+            moxfield_username,
+            moxfield_password,
+            capsolver_api_key,
+            moxfield_csv,
+            moxfield_export_path,
+        )
+
+    print(
+        f"[12/12] Uploading Moxfield collection export to s3://{s3_bucket}/moxfield/..."
+    )
+    upload_file_to_s3(s3_bucket, moxfield_export_path, moxfield_export_key)
+
+    print(
+        "      -> diff: pre-sync Moxfield collection export vs this run's import CSV..."
+    )
+    export_vs_import_diff = format_moxfield_inventory_diff(
+        parse_moxfield_card_counts(moxfield_export_path.read_text(encoding="utf-8")),
+        parse_moxfield_card_counts(new_csv_text),
+        "Diff (pre-sync Moxfield export vs this run's import CSV)",
+    )
+    print(export_vs_import_diff)
+
+    summary = (
+        f"Sync completed at {timestamp} (UTC).\n\n"
+        f"Uploaded files:\n"
+        f"  s3://{s3_bucket}/{echomtg_key}\n"
+        f"  s3://{s3_bucket}/{moxfield_export_key}\n"
+        f"  s3://{s3_bucket}/{moxfield_key}\n\n"
+        f"{diff_text}\n\n"
+        f"{export_vs_import_diff}\n"
+    )
+    if moxfield_import_errors:
+        lines = "\n".join(f"  • {err}" for err in moxfield_import_errors)
+        summary += f"\nMoxfield import reported the following row errors:\n{lines}\n"
+    return summary, moxfield_import_errors
+
+
+def main() -> int:
+    print("[sync] MTG Glue container started", flush=True)
+    username = os.environ["ECHOMTG_USERNAME"]
+    password = os.environ["ECHOMTG_PASSWORD"]
+    s3_bucket = os.environ["S3_BUCKET"]
+    notification_sender = os.environ["NOTIFICATION_SENDER_EMAIL"]
+    notification_recipient = os.environ["NOTIFICATION_RECIPIENT_EMAIL"]
+    moxfield_username = os.environ["MOXFIELD_USERNAME"]
+    moxfield_password = os.environ["MOXFIELD_PASSWORD"]
+    capsolver_api_key = os.environ["CAPSOLVER_API_KEY"]
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H:%M:%S")
+
+    try:
+        summary, moxfield_import_errors = _run(
+            username,
+            password,
+            s3_bucket,
+            timestamp,
+            moxfield_username,
+            moxfield_password,
+            capsolver_api_key,
+        )
+        n_err = len(moxfield_import_errors)
+        if n_err:
+            print(
+                f"[error] Moxfield reported {n_err} import row error(s); "
+                "treating sync as failed."
+            )
+            print("[done] Sending failure notification...")
+            subject = (
+                f"MTG Glue sync FAILED ({n_err} Moxfield import row "
+                f"error{'s' if n_err != 1 else ''})"
+            )
+            body = (
+                "The pipeline finished uploads, but Moxfield reported "
+                "row-level import errors (see below).\n\n"
+                f"{summary}"
+            )
+            send_notification(
+                notification_sender,
+                notification_recipient,
+                subject,
+                body,
+            )
+            return 1
+        print("[done] Sending success notification...")
+        send_notification(
+            notification_sender,
+            notification_recipient,
+            "MTG Glue sync succeeded",
+            summary,
+        )
+        return 0
+    except Exception as exc:
+        error_body = (
+            f"Sync failed at {timestamp} (UTC).\n\n"
+            f"Error: {exc}\n\n"
+            f"{traceback.format_exc()}"
+        )
+        print(f"[error] {exc}")
+        print("[done] Sending failure notification...")
+        send_notification(
+            notification_sender,
+            notification_recipient,
+            "MTG Glue sync FAILED",
+            error_body,
+        )
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

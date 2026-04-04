@@ -26,7 +26,18 @@ tasks:
   browser:run:
     desc: Run the browser automation container
     cmds:
-      - docker compose run --rm browser-glue
+      # -T avoids a TTY so logs stream immediately and nothing blocks on stdin.
+      - docker compose run -T --rm browser-glue
+
+  moxfield:import:
+    desc: Convert EchoMTG export CSV to Moxfield import CSV (extra flags after --)
+    cmds:
+      - poetry run moxfield-import {{.CLI_ARGS}}
+
+  moxfield:import:help:
+    desc: Show moxfield-import CLI options
+    cmds:
+      - poetry run moxfield-import --help
 
   infra:init:bootstrap:
     desc: Initialise the bootstrap Terraform workspace (local state)

@@ -8,6 +8,14 @@
 .env
 .env/
 
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
 # python
 __pycache__/
 *.py[cod]

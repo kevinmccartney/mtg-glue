@@ -5,7 +5,11 @@ services:
       dockerfile: projects/browser_automation/Dockerfile
     env_file:
       - .env
+    stdin_open: false
+    entrypoint: ["sh"]
+    tty: false
     environment:
+      - PYTHONUNBUFFERED=1
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY
       - AWS_SESSION_TOKEN

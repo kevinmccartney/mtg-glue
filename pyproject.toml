@@ -30,7 +30,7 @@ types-boto3 = "^1.42.82"
 
 [tool.poetry.scripts]
 moxfield-import = "cli.echo_mtg_to_moxfield:main"
-browser-hello = "browser_automation.hello_world:main"
+echo-moxfield-etl = "browser_automation.echo_moxfield_etl:main"
 
 [build-system]
 requires = ["poetry-core>=1.8.0"]
