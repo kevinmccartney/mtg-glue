@@ -4,9 +4,9 @@ Personal tooling for EchoMTG → Moxfield collection sync, S3 exports, and email
 
 ## TODO
 
-- [ ] Export retention
 - [ ] Clean up ETL code
 - [ ] Create debug mode
+- [ ] Monorepo tooling
 
 ## Deploying the ETL to AWS
 
@@ -45,7 +45,9 @@ task infra:plan:mtg-glue    # review
 task infra:apply:mtg-glue
 ```
 
-This provisions the **S3** data bucket, **SES** identities, **ECR** repository `mtg-glue-etl`, **ECS** cluster `mtg-glue`, Fargate **task definition**, **Step Functions** state machine `mtg-glue-etl`, **SQS** DLQ for exhausted failures, **Secrets Manager** secret `mtg-glue/etl-env`, **CloudWatch** logs, security group, and the **EventBridge** schedule (default: daily at 06:00 UTC). Override schedule, task size, or Step Functions retry/timeout via `etl_schedule_expression`, `etl_schedule_enabled`, `etl_cpu`, `etl_memory`, `etl_sfn_task_timeout_seconds`, `etl_sfn_retry_max_attempts`, `etl_sfn_retry_interval_seconds`, and `etl_sfn_retry_backoff_rate` in [`projects/infra/mtg_glue/variables.tf`](projects/infra/mtg_glue/variables.tf) or `-var` flags.
+This provisions the **S3** data bucket (with lifecycle rules that expire **noncurrent object versions** under `echomtg/` and `moxfield/` after seven days—see [`projects/infra/mtg_glue/main.tf`](projects/infra/mtg_glue/main.tf)), **SES** identities, **ECR** repository `mtg-glue-etl`, **ECS** cluster `mtg-glue`, Fargate **task definition**, **Step Functions** state machine `mtg-glue-etl`, **SQS** DLQ for exhausted failures, **Secrets Manager** secret `mtg-glue/etl-env`, **CloudWatch** logs, security group, and the **EventBridge** schedule (default: daily at 06:00 UTC). Override schedule, task size, Step Functions retry/timeout, or **how many timestamped CSVs to keep per export family** via `etl_schedule_expression`, `etl_schedule_enabled`, `etl_cpu`, `etl_memory`, `etl_sfn_task_timeout_seconds`, `etl_sfn_retry_max_attempts`, `etl_sfn_retry_interval_seconds`, `etl_sfn_retry_backoff_rate`, and `s3_csv_retention_count` in [`projects/infra/mtg_glue/variables.tf`](projects/infra/mtg_glue/variables.tf) or `-var` flags.
+
+**S3 “last N” CSV retention:** S3 lifecycle alone cannot keep exactly the last _N_ objects. After each successful upload of the three timestamped exports, the ETL trims each family to the newest **20** objects by default (`echomtg/echomtg-export-*`, `moxfield/moxfield-import-*`, `moxfield/moxfield-collection-export-*`). The ECS task sets `S3_CSV_RETENTION_COUNT` from Terraform; for local runs, set the same variable in `.env` if you want a non-default value (`0` disables trimming).
 
 ### 4. Secrets and config in AWS
 

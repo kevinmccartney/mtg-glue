@@ -38,3 +38,35 @@ resource "aws_s3_bucket_public_access_block" "main" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+
+# Versioning is on; application deletes use delete markers. Expire noncurrent
+# versions so retained “last N” does not leave unbounded hidden versions.
+resource "aws_s3_bucket_lifecycle_configuration" "main_exports" {
+  bucket = aws_s3_bucket.main.id
+
+  rule {
+    id     = "expire-noncurrent-echomtg-csv-versions"
+    status = "Enabled"
+
+    filter {
+      prefix = "echomtg/"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+
+  rule {
+    id     = "expire-noncurrent-moxfield-csv-versions"
+    status = "Enabled"
+
+    filter {
+      prefix = "moxfield/"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+}

@@ -61,3 +61,9 @@ variable "etl_sfn_retry_backoff_rate" {
   type        = number
   default     = 2.0
 }
+
+variable "s3_csv_retention_count" {
+  description = "After each successful upload batch, keep this many newest timestamped CSVs per family (Echo export, Moxfield import, Moxfield collection export). Set 0 to disable trimming."
+  type        = number
+  default     = 20
+}

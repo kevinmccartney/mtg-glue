@@ -93,16 +93,6 @@ class OutputConfig(BaseModel):
     aggregation: str | None = None
 
 
-class ManuallyTracked(BaseModel):
-    name: str
-    edition: str
-    collector_number: str | None = None
-    foil: bool = False
-    count: int = 1
-    condition: str = "NM"
-    language: str = "English"
-
-
 class Config(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -116,4 +106,3 @@ class Config(BaseModel):
     mapper_rules: list[MapperRule] = Field(default_factory=list)
     filter_rules: list[FilterRule] = Field(default_factory=list)
     output: OutputConfig = Field(default_factory=OutputConfig)
-    manually_tracked: list[ManuallyTracked] = Field(default_factory=list)

@@ -13,7 +13,8 @@ DEFAULT_CONFIG_PATH = Path("config.yaml")
 DEFAULT_CONFIG: Config = Config()
 
 
-def _merge_raw_config(raw: object) -> Config:
+def _merge_config_input(raw: object) -> Config:
+    """Merge user config with built-in defaults."""
     user_config = Config.model_validate(raw or {})
     merged = {
         **DEFAULT_CONFIG.model_dump(),
@@ -23,7 +24,7 @@ def _merge_raw_config(raw: object) -> Config:
 
 
 def load_config(path: Path) -> Config:
-    """Load merged config from a local YAML file.
+    """Load config from a local YAML file.
 
     Missing file returns built-in defaults.
     """
@@ -33,7 +34,7 @@ def load_config(path: Path) -> Config:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception as exc:  # pragma: no cover - runtime guard
         raise ValueError(f"Failed to parse config file {path}") from exc
-    return _merge_raw_config(raw)
+    return _merge_config_input(raw)
 
 
 def load_etl_runtime_config() -> Config:
@@ -57,6 +58,6 @@ def load_etl_runtime_config() -> Config:
             raise ValueError(
                 f"Failed to parse YAML from s3://{bucket}/{s3_key}"
             ) from exc
-        return _merge_raw_config(raw)
+        return _merge_config_input(raw)
 
     return load_config(DEFAULT_CONFIG_PATH)

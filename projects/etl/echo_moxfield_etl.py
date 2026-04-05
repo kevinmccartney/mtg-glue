@@ -15,7 +15,7 @@ from playwright.sync_api import sync_playwright
 from cli.echo_mtg_to_moxfield import convert_echo_export_to_moxfield
 from lib.config import load_etl_runtime_config
 from lib.diff import format_moxfield_export_vs_import_diff
-from lib.s3 import boto_client, upload_file_to_s3
+from lib.s3 import boto_client, retain_newest_by_key_prefix, upload_file_to_s3
 
 load_dotenv()
 
@@ -25,6 +25,35 @@ OUT_DIR = Path(".out")
 
 def _env_truthy(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _s3_csv_retention_count() -> int:
+    raw = os.environ.get("S3_CSV_RETENTION_COUNT", "20").strip()
+    if not raw:
+        return 20
+    try:
+        return int(raw)
+    except ValueError:
+        return 20
+
+
+def _trim_timestamped_export_csvs(bucket: str) -> None:
+    """Keep the newest N objects per export family; see S3_CSV_RETENTION_COUNT."""
+    keep = _s3_csv_retention_count()
+    if keep <= 0:
+        return
+    families = (
+        "echomtg/echomtg-export-",
+        "moxfield/moxfield-import-",
+        "moxfield/moxfield-collection-export-",
+    )
+    for prefix in families:
+        removed = retain_newest_by_key_prefix(bucket, prefix, keep)
+        if removed:
+            print(
+                f"      -> S3 retention: deleted {removed} older object(s) "
+                f"matching {prefix}*.csv"
+            )
 
 
 def send_notification(sender: str, recipient: str, subject: str, body: str) -> None:
@@ -426,6 +455,8 @@ def _run(
         f"[11/11] Uploading Moxfield collection export to s3://{s3_bucket}/moxfield/..."
     )
     upload_file_to_s3(s3_bucket, moxfield_export_path, moxfield_export_key)
+
+    _trim_timestamped_export_csvs(s3_bucket)
 
     export_vs_import_diff = format_moxfield_export_vs_import_diff(
         moxfield_export_path.read_text(encoding="utf-8"),

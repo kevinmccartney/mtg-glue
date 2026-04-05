@@ -139,6 +139,7 @@ locals {
       { name = "AWS_REGION", value = var.aws_region },
       { name = "S3_BUCKET", value = aws_s3_bucket.main.id },
       { name = "MTG_GLUE_CONFIG_S3_KEY", value = "config/config.yaml" },
+      { name = "S3_CSV_RETENTION_COUNT", value = tostring(var.s3_csv_retention_count) },
       { name = "NOTIFICATION_SENDER_EMAIL", value = var.notification_sender_email },
       { name = "NOTIFICATION_RECIPIENT_EMAIL", value = var.notification_recipient_email },
       { name = "PYTHONUNBUFFERED", value = "1" },

@@ -1,4 +1,6 @@
-"""Diff Moxfield collection export vs import CSV using a loose line identity (not Name)."""
+"""
+Diff Moxfield collection export vs import CSV using a loose line identity (not Name).
+"""
 
 from __future__ import annotations
 
@@ -8,8 +10,11 @@ import re
 from collections import defaultdict
 from typing import NamedTuple
 
+from lib.utils import strip_bom
+
 # Rows are correlated by these dimensions (normalized); Name is compared separately.
-# Tradelist Count is omitted: import CSV uses 0 while Moxfield exports often mirror Count.
+# Tradelist Count is omitted: import CSV uses 0 while Moxfield
+# exports often mirror Count.
 COMPARE_FIELDS = (
     "Name",
     "Edition",
@@ -25,13 +30,8 @@ class _LineAgg(NamedTuple):
     fields: dict[str, frozenset[str]]
 
 
-def _strip_bom(text: str) -> str:
-    if text.startswith("\ufeff"):
-        return text[1:]
-    return text
-
-
 def _cell(row: dict[str, str | None], *header_names: str) -> str:
+    """Get the first non-empty cell value from the row."""
     for name in header_names:
         v = row.get(name)
         if v is None:
@@ -43,6 +43,7 @@ def _cell(row: dict[str, str | None], *header_names: str) -> str:
 
 
 def _parse_line_quantity(row: dict[str, str | None]) -> int:
+    """Parse the line quantity from the row."""
     for header in ("Count", "Quantity"):
         raw = row.get(header)
         if raw is None or str(raw).strip() == "":
@@ -55,6 +56,7 @@ def _parse_line_quantity(row: dict[str, str | None]) -> int:
 
 
 def _field_value(row: dict[str, str | None], field: str) -> str:
+    """Get the value of the field from the row."""
     if field == "Foil":
         return _cell(row, "Foil", "Printing", "Finish").strip()
     if field == "Name":
@@ -71,6 +73,7 @@ def _field_value(row: dict[str, str | None], field: str) -> str:
 
 
 def _condition_match_key(raw: str) -> str:
+    """Normalize the condition value."""
     t = raw.strip().upper().replace(" ", "")
     if t in {"MINT", "M"}:
         return "m"
@@ -88,6 +91,7 @@ def _condition_match_key(raw: str) -> str:
 
 
 def _language_match_key(raw: str) -> str:
+    """Normalize the language value."""
     if not raw.strip():
         return "en"
     k = raw.strip().lower().replace(" ", "").replace("-", "")
@@ -159,7 +163,7 @@ def _accumulate_inventory(
         defaultdict(lambda: defaultdict(set))
     )
 
-    reader = csv.DictReader(io.StringIO(_strip_bom(csv_text)))
+    reader = csv.DictReader(io.StringIO(strip_bom(csv_text)))
     for row in reader:
         qty = _parse_line_quantity(row)
         if qty <= 0:
@@ -237,6 +241,22 @@ def _collector_values_equivalent(exp: frozenset[str], imp: frozenset[str]) -> bo
     return _collector_correlation_key(e) == _collector_correlation_key(i)
 
 
+def _inventory_totals(
+    inv: dict[tuple[str, str, str, str, str], _LineAgg],
+) -> tuple[int, int]:
+    """Return (distinct correlation keys, sum of quantities)."""
+    if not inv:
+        return (0, 0)
+    return (len(inv), sum(agg.qty for agg in inv.values()))
+
+
+def _section_qty_total(
+    keys: list[tuple[str, str, str, str, str]],
+    inv: dict[tuple[str, str, str, str, str], _LineAgg],
+) -> int:
+    return sum(inv[k].qty for k in keys)
+
+
 def format_moxfield_export_vs_import_diff(
     export_csv_text: str,
     import_csv_text: str,
@@ -245,12 +265,20 @@ def format_moxfield_export_vs_import_diff(
     """
     Compare pre-sync Moxfield collection export to the generated import CSV.
 
+    This is the snapshot taken **before** delete/import in the browser flow, so a
+    large “only on import” section is normal when replacing the online collection
+    with a different Echo-derived file—not a sign that Moxfield rejected rows.
+
     Rows are matched on (edition, collector, finish bucket, language, condition)
     with normalization: NM vs Near Mint; EN vs English; foil vs etched as one
     premium bucket; collector 129 vs 129s when the only suffix is s/p/z; DFC
     export names vs Echo front-face names are not flagged when the front matches.
     UB / Secret Lair name swaps still surface as Name diffs (fix with config
     overrides). Output lists per-field differences and count deltas.
+
+    Section counts are **distinct printings** (correlation keys); each line also
+    shows ``x{qty}`` for copies of that printing. Headers repeat total copies
+    in that section so “1905 lines” is not confused with “1905 cards”.
     """
     exp = _accumulate_inventory(export_csv_text)
     imp = _accumulate_inventory(import_csv_text)
@@ -260,6 +288,22 @@ def format_moxfield_export_vs_import_diff(
     both = sorted(set(exp) & set(imp))
 
     lines = [heading if heading.endswith(":") else f"{heading}:"]
+    ex_d, ex_q = _inventory_totals(exp)
+    im_d, im_q = _inventory_totals(imp)
+    lines.append(
+        "  Context: Moxfield CSV was captured before “delete entire collection” "
+        "and import; it is the old online collection, not the file you just uploaded."
+    )
+    lines.append(
+        f"  Inventory totals — Moxfield export: {ex_d} distinct printings, "
+        f"{ex_q} copies | Import CSV: {im_d} distinct printings, {im_q} copies."
+    )
+    if not exp and imp:
+        lines.append(
+            "  Warning: export side parsed to zero quantity rows (check Count/Quantity "
+            "columns and CSV encoding); diff “only on import”"
+            "will list the full import."
+        )
 
     field_mismatch_lines: list[str] = []
     qty_only_lines: list[str] = []
@@ -309,10 +353,16 @@ def format_moxfield_export_vs_import_diff(
         return "\n".join(lines)
 
     if only_exp_lines:
-        lines.append(f"\nOnly on Moxfield export ({len(only_exp_lines)}):")
+        oq = _section_qty_total(only_exp, exp)
+        lines.append(
+            f"\nOnly on Moxfield export ({len(only_exp_lines)} distinct, {oq} copies):"
+        )
         lines.extend(only_exp_lines)
     if only_imp_lines:
-        lines.append(f"\nOnly on import CSV ({len(only_imp_lines)}):")
+        oq = _section_qty_total(only_imp, imp)
+        lines.append(
+            f"\nOnly on import CSV ({len(only_imp_lines)} distinct, {oq} copies):"
+        )
         lines.extend(only_imp_lines)
     if field_mismatch_lines:
         lines.append(

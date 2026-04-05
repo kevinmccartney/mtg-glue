@@ -30,8 +30,6 @@ rewrite_rules:
 # output:
 #   aggregation: "edition"
 
-manually_tracked: []
-
 filter_rules:
   - name: "skip-set-codes"
     field: "set_code"

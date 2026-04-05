@@ -11,7 +11,6 @@ from .types import (
     MapperRule,
     FilterRule,
     OutputConfig,
-    ManuallyTracked,
 )
 
 __all__ = [
@@ -25,5 +24,4 @@ __all__ = [
     "MapperRule",
     "FilterRule",
     "OutputConfig",
-    "ManuallyTracked",
 ]

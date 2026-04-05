@@ -1,6 +1,6 @@
 from typing import Optional
 
-from models import EchoMtgExportRow, MoxfieldImportRow, ManuallyTracked
+from models import EchoMtgExportRow, MoxfieldImportRow
 
 
 def echo_to_moxfield_rows(row: EchoMtgExportRow) -> list[MoxfieldImportRow]:
@@ -25,18 +25,3 @@ def echo_to_moxfield_rows(row: EchoMtgExportRow) -> list[MoxfieldImportRow]:
     if row.foil_qty > 0:
         results.append(build_row(row.foil_qty, "foil"))
     return results
-
-
-def manual_to_moxfield_row(entry: ManuallyTracked) -> MoxfieldImportRow:
-    foil_value: Optional[str] = "foil" if entry.foil else None
-    return MoxfieldImportRow(
-        count=entry.count,
-        tradelist_count=0,
-        name=entry.name,
-        edition=entry.edition,
-        condition=entry.condition,  # type: ignore[arg-type]
-        language=entry.language,
-        foil=foil_value,  # type: ignore[arg-type]
-        collector_number=entry.collector_number,
-        alter=False,
-    )

@@ -13,7 +13,7 @@ from lib.config import DEFAULT_CONFIG_PATH, load_config
 from lib.rewrites import apply_rewrite_rules
 from lib.mappers import apply_mapper_rules
 from lib.overrides import apply_override
-from lib.transformers import echo_to_moxfield_rows, manual_to_moxfield_row
+from lib.transformers import echo_to_moxfield_rows
 from lib.filters import apply_filter_rules
 from lib.reporters import write_moxfield_reports
 
@@ -49,9 +49,6 @@ def convert_echo_export_to_moxfield(
             mapped_row = apply_mapper_rules(row, config.mapper_rules)
             rewritten_row = apply_rewrite_rules(mapped_row, config.rewrite_rules)
             out_rows.extend(echo_to_moxfield_rows(rewritten_row))
-
-    for manual in config.manually_tracked:
-        out_rows.append(manual_to_moxfield_row(manual))
 
     report_results = write_moxfield_reports(
         out_rows, output_path, config.output.aggregation

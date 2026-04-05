@@ -1,10 +1,16 @@
-"""Shared helpers for Pydantic CSV models."""
+"""Shared helpers."""
 
 from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Optional
+
+
+def strip_bom(text: str) -> str:
+    if text.startswith("\ufeff"):
+        return text[1:]
+    return text
 
 
 def to_int(value: object, default: int = 0) -> int:
