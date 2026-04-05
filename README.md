@@ -2,6 +2,12 @@
 
 Personal tooling for EchoMTG → Moxfield collection sync, S3 exports, and email notifications.
 
+## TODO
+
+- [ ] Export retention
+- [ ] Clean up ETL code
+- [ ] Create debug mode
+
 ## Deploying the ETL to AWS
 
 The scheduled job runs as an **ECS Fargate** task (see `projects/infra/mtg_glue/etl.tf`): **EventBridge** triggers **RunTask** on a cron; the container runs `python -m etl.echo_moxfield_etl` under **Xvfb** with the CapSolver browser extension.
@@ -45,13 +51,13 @@ This provisions the **S3** data bucket, **SES** identities, **ECR** repository `
 
 1. **Secrets Manager** — Open secret `mtg-glue/etl-env` and set JSON keys: `ECHOMTG_USERNAME`, `ECHOMTG_PASSWORD`, `MOXFIELD_USERNAME`, `MOXFIELD_PASSWORD`, `CAPSOLVER_API_KEY`. Terraform only seeds placeholders; updating values in the console is normal.
 
-2. **Config YAML** — Upload your merged config to the **same bucket** Terraform created for data (see `terraform output bucket_name`):
+2. **Config YAML** — Put `./config.yaml` in the data bucket at `config/config.yaml` (same key the ECS task uses):
 
    ```bash
-   aws s3 cp config.yaml "s3://$(terraform -chdir=projects/infra/mtg_glue output -raw bucket_name)/config/config.yaml"
+   task etl:upload-config
    ```
 
-   The task sets `MTG_GLUE_CONFIG_S3_KEY=config/config.yaml` so the ETL loads config from that object. Start from `config.yaml.example` if you do not have a local `config.yaml`.
+   Or manually: `aws s3 cp config.yaml "s3://$(terraform -chdir=projects/infra/mtg_glue output -raw bucket_name)/config/config.yaml"`. Start from `config.yaml.example` if needed.
 
 ### 5. Build and push the container image
 
@@ -68,10 +74,10 @@ The Compose service sets **`platform: linux/amd64`** so the image matches **Farg
 ### 6. Smoke test before relying on the schedule
 
 ```bash
-task etl:smoke-run
+task etl:run:fargate
 ```
 
-Run the printed `aws ecs run-task ...` command once. Check **CloudWatch** log group from `terraform output etl_cloudwatch_log_group`.
+Starts a one-off Fargate task using `terraform output -raw etl_manual_run_cli_example` (same wiring as a manual `aws ecs run-task`). Check **CloudWatch** log group from `terraform output etl_cloudwatch_log_group`.
 
 ### 7. Schedule
 
@@ -88,14 +94,16 @@ poetry run moxfield-import --help
 task etl:build
 ```
 
-Run the full sync on your machine with visible browsers: `projects/etl/run_headed_local.sh` (see comments in that script for CapSolver setup).
+Run the full sync on your machine with visible browsers: `task etl:run:headed` (same as `projects/etl/run_headed_local.sh`; see that script for CapSolver setup). Extra args after `--` are forwarded to the ETL module.
 
 ## Useful Task targets
 
-| Task | Purpose |
-|------|---------|
-| `task etl:build` | Build Docker image `mtg-glue-etl:local` |
-| `task etl:run` | Shell in the ETL container |
-| `task etl:push-ecr` | Build, tag `:latest`, push to ECR |
-| `task etl:smoke-run` | Print a one-off `aws ecs run-task` example |
-| `task infra:validate:mtg-glue` | `terraform validate` without remote backend |
+| Task                           | Purpose                                               |
+| ------------------------------ | ----------------------------------------------------- |
+| `task etl:build`               | Build Docker image `mtg-glue-etl:local`               |
+| `task etl:run:local`           | Shell in the ETL container                            |
+| `task etl:run:headed`          | Full ETL on host (headed Playwright, not Docker)      |
+| `task etl:upload-config`       | Upload `./config.yaml` to `s3://…/config/config.yaml` |
+| `task etl:push-ecr`            | Build, tag `:latest`, push to ECR                     |
+| `task etl:run:fargate`         | Start a one-off Fargate ETL task                      |
+| `task infra:validate:mtg-glue` | `terraform validate` without remote backend           |

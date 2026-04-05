@@ -51,10 +51,13 @@ output "etl_schedule_rule_name" {
 output "etl_manual_run_cli_example" {
   description = "One-off Fargate run using the default VPC's first subnet (smoke test after image push + secrets)."
   value = format(
-    "aws ecs run-task --cluster %s --launch-type FARGATE --task-definition %s --network-configuration \"awsvpcConfiguration={subnets=[%s],securityGroups=[%s],assignPublicIp=ENABLED}\"",
-    aws_ecs_cluster.etl.name,
-    aws_ecs_task_definition.etl.family,
-    data.aws_subnets.default.ids[0],
-    aws_security_group.etl_task.id,
+    "%s\n",
+    format(
+      "aws ecs run-task --cluster %s --launch-type FARGATE --task-definition %s --network-configuration \"awsvpcConfiguration={subnets=[%s],securityGroups=[%s],assignPublicIp=ENABLED}\"",
+      aws_ecs_cluster.etl.name,
+      aws_ecs_task_definition.etl.family,
+      data.aws_subnets.default.ids[0],
+      aws_security_group.etl_task.id,
+    ),
   )
 }

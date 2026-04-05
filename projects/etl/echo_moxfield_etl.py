@@ -14,15 +14,8 @@ from playwright.sync_api import sync_playwright
 
 from cli.echo_mtg_to_moxfield import convert_echo_export_to_moxfield
 from lib.config import load_etl_runtime_config
-from lib.diff import (
-    format_moxfield_inventory_diff,
-    parse_moxfield_card_counts,
-)
-from lib.s3 import (
-    boto_client,
-    fetch_latest_moxfield_import_csv,
-    upload_file_to_s3,
-)
+from lib.diff import format_moxfield_export_vs_import_diff
+from lib.s3 import boto_client, upload_file_to_s3
 
 load_dotenv()
 
@@ -399,10 +392,10 @@ def _run(
     moxfield_export_key = f"moxfield/moxfield-collection-export-{timestamp}.csv"
     moxfield_export_path = Path(".data") / f"moxfield-collection-export-{timestamp}.csv"
 
-    print(f"[7/12] Uploading EchoMTG export to s3://{s3_bucket}/echomtg/...")
+    print(f"[7/11] Uploading EchoMTG export to s3://{s3_bucket}/echomtg/...")
     upload_file_to_s3(s3_bucket, EXPORT_PATH, echomtg_key)
 
-    print("[8/12] Running Moxfield import pipeline...")
+    print("[8/11] Running Moxfield import pipeline (Echo → import CSV)...")
     etl_config = load_etl_runtime_config()
     exit_code = convert_echo_export_to_moxfield(
         etl_config,
@@ -415,31 +408,10 @@ def _run(
     moxfield_csv = OUT_DIR / "moxfield-import.csv"
     new_csv_text = moxfield_csv.read_text(encoding="utf-8")
 
-    print("[9/12] Computing diff against previous Moxfield import in S3...")
-    previous = fetch_latest_moxfield_import_csv(s3_bucket)
-    if previous:
-        prev_key, prev_csv_text = previous
-        print(f"      -> comparing against {prev_key}")
-        prev_ts = prev_key.removeprefix("moxfield/moxfield-import-").removesuffix(
-            ".csv"
-        )
-        diff_text = format_moxfield_inventory_diff(
-            parse_moxfield_card_counts(prev_csv_text),
-            parse_moxfield_card_counts(new_csv_text),
-            f"Diff vs prior run ({prev_ts})",
-        )
-        print(diff_text)
-    else:
-        print("      -> no previous Moxfield import in S3, skipping run-over-run diff")
-        diff_text = (
-            "No previous Moxfield import in S3 — this is the first sync "
-            "(run-over-run diff skipped)."
-        )
-
-    print(f"[10/12] Uploading Moxfield import to s3://{s3_bucket}/moxfield/...")
+    print(f"[9/11] Uploading Moxfield import to s3://{s3_bucket}/moxfield/...")
     upload_file_to_s3(s3_bucket, moxfield_csv, moxfield_key)
 
-    print("[11/12] Logging into Moxfield (CapSolver extension)...")
+    print("[10/11] Logging into Moxfield (CapSolver extension)...")
     with sync_playwright() as p:
         moxfield_import_errors = _moxfield_login_with_capsolver_extension(
             p,
@@ -451,19 +423,16 @@ def _run(
         )
 
     print(
-        f"[12/12] Uploading Moxfield collection export to s3://{s3_bucket}/moxfield/..."
+        f"[11/11] Uploading Moxfield collection export to s3://{s3_bucket}/moxfield/..."
     )
     upload_file_to_s3(s3_bucket, moxfield_export_path, moxfield_export_key)
 
-    print(
-        "      -> diff: pre-sync Moxfield collection export vs this run's import CSV..."
+    export_vs_import_diff = format_moxfield_export_vs_import_diff(
+        moxfield_export_path.read_text(encoding="utf-8"),
+        new_csv_text,
+        "Diff (pre-sync Moxfield collection export vs this run's import CSV)",
     )
-    export_vs_import_diff = format_moxfield_inventory_diff(
-        parse_moxfield_card_counts(moxfield_export_path.read_text(encoding="utf-8")),
-        parse_moxfield_card_counts(new_csv_text),
-        "Diff (pre-sync Moxfield export vs this run's import CSV)",
-    )
-    print(export_vs_import_diff)
+    print("      -> diff computed (full text in email only)")
 
     summary = (
         f"Sync completed at {timestamp} (UTC).\n\n"
@@ -471,7 +440,6 @@ def _run(
         f"  s3://{s3_bucket}/{echomtg_key}\n"
         f"  s3://{s3_bucket}/{moxfield_export_key}\n"
         f"  s3://{s3_bucket}/{moxfield_key}\n\n"
-        f"{diff_text}\n\n"
         f"{export_vs_import_diff}\n"
     )
     if moxfield_import_errors:

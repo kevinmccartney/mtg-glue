@@ -32,7 +32,7 @@ def convert_echo_export_to_moxfield(
 
     with input_path.open("r", encoding="utf-8-sig", newline="") as f_in:
         reader = csv.DictReader(f_in)
-        rows_to_process = []
+        rows_to_process: list[EchoMtgExportRow] = []
         for raw in reader:
 
             try:
@@ -41,9 +41,7 @@ def convert_echo_export_to_moxfield(
                 print(f"Skipping row due to parse error: {exc}")
                 continue
 
-            overridden_rows = apply_override(echo_row, config.overrides)
-
-            rows_to_process.extend(overridden_rows)
+            rows_to_process.extend(apply_override(echo_row, config.overrides))
 
         for row in rows_to_process:
             if apply_filter_rules(row, config.filter_rules):

@@ -4,13 +4,86 @@ from typing import Iterable
 
 from models import MoxfieldImportRow
 
+# Moxfield collection *export* CSV uses full condition phrases and lowercase set codes.
+_CONDITION_TO_EXPORT: dict[str, str] = {
+    "M": "Mint",
+    "NM": "Near Mint",
+    "LP": "Lightly Played",
+    "MP": "Moderately Played",
+    "HP": "Heavily Played",
+    "DM": "Damaged",
+}
 
-def _row_to_dict(row: MoxfieldImportRow, fieldnames: list[str]) -> dict[str, str]:
-    return {
-        k: ("" if v is None else v)
-        for k, v in row.model_dump(by_alias=True).items()
-        if k in fieldnames
+_LANGUAGE_TO_EXPORT: dict[str, str] = {
+    "EN": "English",
+    "ENGLISH": "English",
+    "ES": "Spanish",
+    "SPANISH": "Spanish",
+    "FR": "French",
+    "FRENCH": "French",
+    "DE": "German",
+    "GERMAN": "German",
+    "IT": "Italian",
+    "ITALIAN": "Italian",
+    "PT": "Portuguese",
+    "PORTUGUESE": "Portuguese",
+    "JA": "Japanese",
+    "JAPANESE": "Japanese",
+    "KO": "Korean",
+    "KOREAN": "Korean",
+    "RU": "Russian",
+    "RUSSIAN": "Russian",
+    "ZHS": "Simplified Chinese",
+    "ZHT": "Traditional Chinese",
+}
+
+
+def _condition_for_moxfield_export(row: MoxfieldImportRow) -> str:
+    code = str(row.condition)
+    return _CONDITION_TO_EXPORT.get(code, code)
+
+
+def _language_for_moxfield_export(row: MoxfieldImportRow) -> str:
+    raw = (row.language or "English").strip()
+    key = raw.upper().replace(" ", "")
+    return _LANGUAGE_TO_EXPORT.get(key, raw)
+
+
+def _edition_for_moxfield_export(row: MoxfieldImportRow) -> str:
+    ed = (row.edition or "").strip()
+    return ed.lower()
+
+
+def _foil_for_moxfield_export(row: MoxfieldImportRow) -> str:
+    if row.foil == "foil":
+        return "foil"
+    if row.foil == "etched":
+        return "etched"
+    return ""
+
+
+def _row_to_moxfield_inventory_dict(
+    row: MoxfieldImportRow, fieldnames: list[str]
+) -> dict[str, str]:
+    """Serialize like Moxfield's collection export so diffs are string-aligned."""
+    cells = {
+        "Count": str(row.count),
+        "Tradelist Count": str(row.tradelist_count),
+        "Name": row.name,
+        "Edition": _edition_for_moxfield_export(row),
+        "Condition": _condition_for_moxfield_export(row),
+        "Language": _language_for_moxfield_export(row),
+        "Foil": _foil_for_moxfield_export(row),
+        "Tags": row.tags or "",
+        "Last Modified": row.last_modified or "",
+        "Collector Number": (
+            str(row.collector_number) if row.collector_number is not None else ""
+        ),
+        "Alter": str(row.alter),
+        "Proxy": str(row.proxy),
+        "Purchase Price": row.purchase_price or "",
     }
+    return {k: cells[k] for k in fieldnames}
 
 
 def write_moxfield_csv_file(
@@ -24,7 +97,7 @@ def write_moxfield_csv_file(
         writer = csv.DictWriter(f_out, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows_list:
-            writer.writerow(_row_to_dict(row, fieldnames))
+            writer.writerow(_row_to_moxfield_inventory_dict(row, fieldnames))
     return {"path": str(output_path), "rows": len(rows_list)}
 
 

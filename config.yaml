@@ -50,17 +50,17 @@ overrides:
       set_code: FCA
       collector_number: 4
     dest:
-      - name: "Wild Rose Rebellion"
+      - name: "Counterspell"
   - source:
       set_code: FCA
       collector_number: 33
     dest:
-      - name: "Baron Rivalry"
+      - name: "Deadly Dispute"
   - source:
       set_code: FCA
       collector_number: 59
     dest:
-      - name: "Clive Rosfield"
+      - name: "Vial Smasher the Fierce"
   - source:
       set_code: FCA
       collector_number: 24
@@ -70,22 +70,27 @@ overrides:
       set_code: FCA
       collector_number: 28
     dest:
-      - name: "Endwalker"
+      - name: "Brainstorm"
   - source:
       set_code: FCA
       collector_number: 45
     dest:
-      - name: "Newfound Adventure"
+      - name: "Farseek"
   - source:
       set_code: FCA
       collector_number: 57
     dest:
-      - name: "Orphan, Cocoon fal'Cie"
+      - name: "Muldrotha, the Gravetide"
   - source:
       set_code: FCA
       collector_number: 38
     dest:
-      - name: "Vaan, Aspiring Sky Pirate"
+      - name: "Captain Lannery Storm"
+  - source:
+      set_code: FCA
+      collector_number: 61
+    dest:
+      - name: "Chromatic Lantern"
   - source:
       set_code: LCC
       collector_number: 123
@@ -97,15 +102,23 @@ overrides:
     dest:
       - name: "Kraul Whipcracker"
   - source:
+      set_code: MID
+      collector_number: "129"
+      name: "Bloodthirsty Adversary"
+    dest:
+      reg_qty: 0
+      foil_qty: 1
+  - source:
       set_code: SLD
       collector_number: 1927
     dest:
-      - name: "Mr. Krabs, Penny Pincher"
+      - name: "Charix, the Raging Isle"
+        condition: "NM"
   - source:
       set_code: SLD
       collector_number: 1931
     dest:
-      - name: "Patrick Star"
+      - name: "Barktooth Warbeard"
   - source:
       set_code: TFDN
       name: "Elf Warrior // Rat (0030) Double-Sided Token"
@@ -137,7 +150,7 @@ overrides:
       name: "Monk // Treasure Double-Sided Token"
     dest:
       - name: "Monk"
-        collector_number: 1
+        collector_number: 3
         set_code: TTDM
       - name: "Treasure"
         collector_number: 16
@@ -419,7 +432,7 @@ overrides:
       name: "Dog // Beast (0033) Double-Sided Token"
     dest:
       - name: "Dog"
-        collector_number: 30
+        collector_number: 29
       - name: "Beast"
         collector_number: 33
   - source:
@@ -515,7 +528,7 @@ overrides:
       name: "Saproling // Poison Counter Double-Sided Token"
     dest:
       - name: "Saproling"
-        collector_number: 3
+        collector_number: 7
       - name: "Poison Counter"
         collector_number: 13
   - source:
@@ -523,7 +536,7 @@ overrides:
       name: "Saproling // The Monarch Double-Sided Token"
     dest:
       - name: "Saproling"
-        collector_number: 3
+        collector_number: 7
       - name: "The Monarch"
         collector_number: 12
   - source:
@@ -571,14 +584,14 @@ overrides:
       set_code: VOW
       collector_number: 341
     dest:
-      - name: "Dracula the Voyager"
+      - name: "Edgar, Charmed Groom // Edgar Markov's Coffin"
   - source:
       set_code: VOW
       collector_number: 332
     dest:
-      - name: "Jonathan Harker"
+      - name: "Jacob Hauken, Inspector // Hauken's Insight"
   - source:
       set_code: VOW
       collector_number: 339
     dest:
-      - name: "Mysterious Blood Illness"
+      - name: "Vampires' Vengeance"

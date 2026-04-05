@@ -9,7 +9,7 @@ services:
     env_file:
       - .env
     stdin_open: false
-    entrypoint: ["sh"]
+    # entrypoint: ["sh"]
     tty: false
     environment:
       - PYTHONUNBUFFERED=1
