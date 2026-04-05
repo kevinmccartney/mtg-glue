@@ -48,6 +48,16 @@ output "etl_schedule_rule_name" {
   value       = aws_cloudwatch_event_rule.etl.name
 }
 
+output "etl_sfn_state_machine_arn" {
+  description = "Step Functions state machine that runs the ETL task (retries, then DLQ)."
+  value       = aws_sfn_state_machine.etl.arn
+}
+
+output "etl_sfn_dlq_url" {
+  description = "SQS queue URL for Step Functions failure payloads after retries are exhausted."
+  value       = aws_sqs_queue.etl_sfn_dlq.url
+}
+
 output "etl_manual_run_cli_example" {
   description = "One-off Fargate run using the default VPC's first subnet (smoke test after image push + secrets)."
   value = format(

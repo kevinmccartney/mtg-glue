@@ -10,7 +10,7 @@ Personal tooling for EchoMTG → Moxfield collection sync, S3 exports, and email
 
 ## Deploying the ETL to AWS
 
-The scheduled job runs as an **ECS Fargate** task (see `projects/infra/mtg_glue/etl.tf`): **EventBridge** triggers **RunTask** on a cron; the container runs `python -m etl.echo_moxfield_etl` under **Xvfb** with the CapSolver browser extension.
+The scheduled job runs as an **ECS Fargate** task orchestrated by **Step Functions** (see `projects/infra/mtg_glue/etl.tf`): **EventBridge** starts a state machine on a cron; the `ecs:runTask.sync` state waits for the task to finish and **retries** on failure (for example flaky captcha). After retries are exhausted, a message is sent to an **SQS DLQ** (`terraform output etl_sfn_dlq_url`). The container still runs `python -m etl.echo_moxfield_etl` under **Xvfb** with the CapSolver browser extension.
 
 ### Prerequisites
 
@@ -45,7 +45,7 @@ task infra:plan:mtg-glue    # review
 task infra:apply:mtg-glue
 ```
 
-This provisions the **S3** data bucket, **SES** identities, **ECR** repository `mtg-glue-etl`, **ECS** cluster `mtg-glue`, Fargate **task definition**, **Secrets Manager** secret `mtg-glue/etl-env`, **CloudWatch** logs, security group, and the **EventBridge** schedule (default: daily at 06:00 UTC; override with Terraform variables `etl_schedule_expression`, `etl_schedule_enabled`, `etl_cpu`, `etl_memory` in `projects/infra/mtg_glue/variables.tf` or `-var` flags).
+This provisions the **S3** data bucket, **SES** identities, **ECR** repository `mtg-glue-etl`, **ECS** cluster `mtg-glue`, Fargate **task definition**, **Step Functions** state machine `mtg-glue-etl`, **SQS** DLQ for exhausted failures, **Secrets Manager** secret `mtg-glue/etl-env`, **CloudWatch** logs, security group, and the **EventBridge** schedule (default: daily at 06:00 UTC). Override schedule, task size, or Step Functions retry/timeout via `etl_schedule_expression`, `etl_schedule_enabled`, `etl_cpu`, `etl_memory`, `etl_sfn_task_timeout_seconds`, `etl_sfn_retry_max_attempts`, `etl_sfn_retry_interval_seconds`, and `etl_sfn_retry_backoff_rate` in [`projects/infra/mtg_glue/variables.tf`](projects/infra/mtg_glue/variables.tf) or `-var` flags.
 
 ### 4. Secrets and config in AWS
 
@@ -81,7 +81,7 @@ Starts a one-off Fargate task using `terraform output -raw etl_manual_run_cli_ex
 
 ### 7. Schedule
 
-After a successful smoke test, leave the EventBridge rule enabled (default). To pause scheduled runs without tearing down infra, set `etl_schedule_enabled = false` and re-apply, or disable the rule in the AWS console.
+After a successful smoke test, leave the EventBridge rule enabled (default). To pause scheduled runs without tearing down infra, set `etl_schedule_enabled = false` and re-apply, or disable the rule in the AWS console. Inspect failed scheduled runs in the **Step Functions** console (`terraform output etl_sfn_state_machine_arn`); if a run exhausted retries, check the DLQ for the error payload.
 
 ---
 

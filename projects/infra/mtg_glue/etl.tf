@@ -1,4 +1,5 @@
 # Scheduled ECS Fargate task: EchoMTG → Moxfield ETL (S3, SES).
+# EventBridge → Step Functions (ecs:runTask.sync, retries) → ECS; exhausted failures → SQS DLQ.
 
 data "aws_vpc" "default" {
   default = true
@@ -191,6 +192,182 @@ resource "aws_security_group" "etl_task" {
   }
 }
 
+resource "aws_sqs_queue" "etl_sfn_dlq" {
+  name                      = "mtg-glue-etl-sfn-dlq"
+  message_retention_seconds = 1209600
+  sqs_managed_sse_enabled   = true
+}
+
+data "aws_iam_policy_document" "sfn_etl_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["states.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "sfn_etl" {
+  name               = "mtg-glue-sfn-etl"
+  assume_role_policy = data.aws_iam_policy_document.sfn_etl_assume.json
+}
+
+data "aws_iam_policy_document" "sfn_etl" {
+  statement {
+    sid    = "ECSRun"
+    effect = "Allow"
+    actions = [
+      "ecs:RunTask",
+    ]
+    resources = [
+      replace(
+        aws_ecs_task_definition.etl.arn,
+        ":${aws_ecs_task_definition.etl.revision}",
+        ":*",
+      ),
+    ]
+  }
+
+  statement {
+    sid    = "ECSObserve"
+    effect = "Allow"
+    actions = [
+      "ecs:StopTask",
+      "ecs:DescribeTasks",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "EventBridgeSync"
+    effect = "Allow"
+    actions = [
+      "events:PutTargets",
+      "events:PutRule",
+      "events:DescribeRule",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PassRoles"
+    effect = "Allow"
+    actions = [
+      "iam:PassRole",
+    ]
+    resources = [
+      aws_iam_role.etl_execution.arn,
+      aws_iam_role.etl_task.arn,
+    ]
+  }
+
+  statement {
+    sid    = "Dlq"
+    effect = "Allow"
+    actions = [
+      "sqs:SendMessage",
+    ]
+    resources = [aws_sqs_queue.etl_sfn_dlq.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "sfn_etl" {
+  name   = "etl-ecs-dlq"
+  role   = aws_iam_role.sfn_etl.id
+  policy = data.aws_iam_policy_document.sfn_etl.json
+}
+
+resource "aws_sqs_queue_policy" "etl_sfn_dlq" {
+  queue_url = aws_sqs_queue.etl_sfn_dlq.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowSfnRoleDlq"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.sfn_etl.arn
+        }
+        Action   = "sqs:SendMessage"
+        Resource = aws_sqs_queue.etl_sfn_dlq.arn
+      },
+    ]
+  })
+}
+
+locals {
+  sfn_etl_definition = jsonencode({
+    Comment = "Run mtg-glue ETL on Fargate; retry transient failures; DLQ after exhaustion."
+    StartAt = "RunEtl"
+    States = {
+      RunEtl = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::ecs:runTask.sync"
+        Parameters = {
+          LaunchType     = "FARGATE"
+          Cluster        = aws_ecs_cluster.etl.arn
+          TaskDefinition = aws_ecs_task_definition.etl.family
+          NetworkConfiguration = {
+            AwsvpcConfiguration = {
+              Subnets        = data.aws_subnets.default.ids
+              SecurityGroups = [aws_security_group.etl_task.id]
+              AssignPublicIp = "ENABLED"
+            }
+          }
+          PlatformVersion = "LATEST"
+        }
+        Retry = [
+          {
+            ErrorEquals = [
+              "States.TaskFailed",
+              "States.Timeout",
+              "ECS.ServerException",
+              "ECS.AmazonECSException",
+              "ECS.InvalidParameterException",
+            ]
+            IntervalSeconds = var.etl_sfn_retry_interval_seconds
+            MaxAttempts     = var.etl_sfn_retry_max_attempts
+            BackoffRate     = var.etl_sfn_retry_backoff_rate
+          },
+        ]
+        TimeoutSeconds = var.etl_sfn_task_timeout_seconds
+        Catch = [
+          {
+            ErrorEquals = ["States.ALL"]
+            ResultPath  = "$.error"
+            Next        = "RecordFailure"
+          },
+        ]
+        End = true
+      }
+      RecordFailure = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::sqs:sendMessage"
+        Parameters = merge(
+          {
+            QueueUrl = aws_sqs_queue.etl_sfn_dlq.url
+          },
+          { "MessageBody.$" = "States.JsonToString($.error)" },
+        )
+        End = true
+      }
+    }
+  })
+}
+
+resource "aws_sfn_state_machine" "etl" {
+  name     = "mtg-glue-etl"
+  role_arn = aws_iam_role.sfn_etl.arn
+
+  definition = local.sfn_etl_definition
+
+  depends_on = [
+    aws_iam_role_policy.sfn_etl,
+    aws_sqs_queue_policy.etl_sfn_dlq,
+  ]
+}
+
 data "aws_iam_policy_document" "eventbridge_assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -208,30 +385,12 @@ resource "aws_iam_role" "eventbridge_ecs" {
 
 data "aws_iam_policy_document" "eventbridge_ecs" {
   statement {
-    sid    = "RunTask"
+    sid    = "StartSfn"
     effect = "Allow"
     actions = [
-      "ecs:RunTask",
+      "states:StartExecution",
     ]
-    resources = [
-      replace(
-        aws_ecs_task_definition.etl.arn,
-        ":${aws_ecs_task_definition.etl.revision}",
-        ":*",
-      ),
-    ]
-  }
-
-  statement {
-    sid    = "PassRoles"
-    effect = "Allow"
-    actions = [
-      "iam:PassRole",
-    ]
-    resources = [
-      aws_iam_role.etl_execution.arn,
-      aws_iam_role.etl_task.arn,
-    ]
+    resources = [aws_sfn_state_machine.etl.arn]
   }
 }
 
@@ -243,31 +402,22 @@ resource "aws_iam_role_policy" "eventbridge_ecs" {
 
 resource "aws_cloudwatch_event_rule" "etl" {
   name                = "mtg-glue-etl-schedule"
-  description         = "Trigger mtg-glue ETL ECS task on a schedule"
+  description         = "Trigger mtg-glue ETL Step Functions execution on a schedule"
   schedule_expression = var.etl_schedule_expression
   state               = var.etl_schedule_enabled ? "ENABLED" : "DISABLED"
 }
 
 resource "aws_cloudwatch_event_target" "etl" {
   rule      = aws_cloudwatch_event_rule.etl.name
-  arn       = aws_ecs_cluster.etl.arn
+  arn       = aws_sfn_state_machine.etl.arn
   role_arn  = aws_iam_role.eventbridge_ecs.arn
   target_id = "etl"
+  input     = jsonencode({})
 
-  depends_on = [aws_iam_role_policy.eventbridge_ecs]
-
-  ecs_target {
-    task_count          = 1
-    task_definition_arn = aws_ecs_task_definition.etl.arn
-    launch_type         = "FARGATE"
-    platform_version    = "LATEST"
-
-    network_configuration {
-      subnets          = data.aws_subnets.default.ids
-      security_groups  = [aws_security_group.etl_task.id]
-      assign_public_ip = true
-    }
-  }
+  depends_on = [
+    aws_iam_role_policy.eventbridge_ecs,
+    aws_sfn_state_machine.etl,
+  ]
 }
 
 # Preserve ECS cluster in state when upgrading from aws_ecs_cluster.main (same AWS name "mtg-glue").

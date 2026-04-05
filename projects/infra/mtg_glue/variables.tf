@@ -15,7 +15,7 @@ variable "notification_sender_email" {
 }
 
 variable "etl_schedule_expression" {
-  description = "EventBridge schedule for the mtg-glue ETL ECS task (UTC)."
+  description = "EventBridge schedule (UTC) that starts the mtg-glue ETL Step Functions execution."
   type        = string
   default     = "cron(0 6 * * ? *)"
 }
@@ -36,4 +36,28 @@ variable "etl_memory" {
   description = "Fargate memory (MiB) for ETL task; must pair with CPU."
   type        = number
   default     = 4096
+}
+
+variable "etl_sfn_task_timeout_seconds" {
+  description = "Step Functions timeout for ecs:runTask.sync (whole ETL run, including waits)."
+  type        = number
+  default     = 21600
+}
+
+variable "etl_sfn_retry_max_attempts" {
+  description = "Max attempts for the ECS sync task state after an error (includes the first run)."
+  type        = number
+  default     = 3
+}
+
+variable "etl_sfn_retry_interval_seconds" {
+  description = "Base delay before the first retry of the ECS sync task state."
+  type        = number
+  default     = 120
+}
+
+variable "etl_sfn_retry_backoff_rate" {
+  description = "Step Functions retry backoff multiplier for the ECS sync task state."
+  type        = number
+  default     = 2.0
 }
