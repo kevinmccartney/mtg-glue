@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mtg-glue"
-version = "0.1.0"
+version = "0.3.0"
 description = "A bunch of scripts I use to manage my MTG collection."
 authors = ["Kevin McCartney"]
 readme = "README.md"
@@ -31,6 +31,7 @@ types-pyyaml = "^6.0.12.20250915"
 types-boto3 = "^1.42.82"
 debugpy = "^1.8.20"
 pre-commit = "^4.5.1"
+commitizen = "^4.13.9"
 
 [tool.poetry.scripts]
 moxfield-import = "cli.echo_mtg_to_moxfield:main"
@@ -51,6 +52,16 @@ line_length = 88
 [[tool.mypy.overrides]]
 module = "loguru.*"
 ignore_missing_imports = true
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+tag_format = "v$version"
+version_provider = "poetry"
+update_changelog_on_bump = true
+changelog_incremental = true
+# Same default as Commitizen; needs `bump` in conventional-pre-commit hook args.
+bump_message = "release: $current_version"
 
 [build-system]
 requires = ["poetry-core>=1.8.0"]

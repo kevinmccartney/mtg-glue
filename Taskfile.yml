@@ -28,6 +28,14 @@ tasks:
     cmds:
       - poetry run pre-commit run --all-files
 
+  release:bump:
+    desc: |
+      Commitizen version bump (pyproject tag/changelog).
+      Extra args after -- go to cz bump
+      (e.g. task release:bump -- --dry-run).
+    cmds:
+      - bash scripts/release_bump.sh {{.CLI_ARGS}}
+
   ci:test:
     desc: Run the pytest suite
     cmds:
