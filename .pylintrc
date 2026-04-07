@@ -7,6 +7,9 @@ disable=
     C0114,  # missing-module-docstring
     C0115,  # missing-class-docstring
     C0116,  # missing-function-docstring
+    R0401,  # cyclic-import (false positives with models ↔ types package layout)
+    R0801,  # duplicate-code (noisy across models + tests)
+    W0718,  # broad-exception-caught (ETL / defensive boundaries)
 
 [FORMAT]
 max-line-length=88
@@ -16,6 +19,7 @@ max-args=8
 max-attributes=15
 max-branches=20
 max-locals=30
+max-positional-arguments=10
 max-returns=8
 max-statements=80
 
@@ -29,4 +33,3 @@ ignored-classes=
 
 [BASIC]
 good-names=i,j,k,ex,Run,_,id
-

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from models import EchoMtgItem
-from models.types import OverrideDest, OverrideRule, OverrideSource
+from models.overrides import OverrideDest, OverrideRule, OverrideSource
 
 
 def _match_rule(row: EchoMtgItem, source: OverrideSource) -> bool:

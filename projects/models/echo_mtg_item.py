@@ -12,15 +12,14 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal, cast, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
-
 from lib.utils import (
-    parse_str,
-    parse_int,
     parse_bool,
     parse_date,
     parse_decimal,
+    parse_int,
+    parse_str,
 )
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 # Echo CSV / error labels for required string fields (Python field name → label).
 _REQUIRED_STR_FIELD_LABELS: dict[str, str] = {
@@ -68,6 +67,11 @@ class EchoMtgItem(BaseModel):
         validate_assignment=True,
     )
 
+    # etched_qty is not in the echoMTG export, but needs to be able to be overridden in
+    # the config so that the ETL can add them to the Moxfield import.
+    # Moxfield has the concept of etched cards, which are not represented in
+    # the echoMTG export
+    etched_qty: Annotated[int, Field(default=0)]
     reg_qty: Annotated[int, Field(validation_alias="Reg Qty")]
     foil_qty: Annotated[int, Field(validation_alias="Foil Qty")]
     name: Annotated[str, Field(min_length=1, validation_alias="Name")]
@@ -128,20 +132,22 @@ class EchoMtgItem(BaseModel):
     def _normalize_condition(cls, v: object) -> EchoCondition:
         raw = parse_str(v, field="Condition").upper()
         if raw not in _ECHO_CONDITION_ALLOWED:
-            raise ValueError(f"unparseable Condition cell: {v!r}")
+            raise ValueError(f"unparsable Condition cell: {v!r}")
         return cast(EchoCondition, raw)
 
     @field_validator("set_code", mode="before")
     @classmethod
     def _normalize_set_code(cls, v: object) -> str:
-        return parse_str(v, field="Set Code")
+        # another case of unfortunate inconsistency in the echoMTG export
+        # both mixed case and trailing spaces are present
+        return parse_str(v, field="Set Code").upper().strip()
 
     @field_validator("language", mode="before")
     @classmethod
     def _normalize_language(cls, v: object) -> EchoLanguage:
         raw = parse_str(v, field="Language")
         if raw not in _ECHO_LANGUAGE_ALLOWED:
-            raise ValueError(f"unparseable Language cell: {v!r}")
+            raise ValueError(f"unparsable Language cell: {v!r}")
 
         return cast(EchoLanguage, raw)
 
@@ -157,6 +163,13 @@ class EchoMtgItem(BaseModel):
         if raw == "S":
             raw = "Special"
         if raw not in _ECHO_RARITY_ALLOWED:
-            raise ValueError(f"unparseable Rarity cell: {v!r}")
+            raise ValueError(f"unparsable Rarity cell: {v!r}")
 
         return cast(EchoRarity, raw)
+
+    @field_validator("collector_number", mode="before")
+    @classmethod
+    def _normalize_collector_number(cls, v: object) -> str:
+        # another case of unfortunate inconsistency in the echoMTG export
+        # trailing spaces are present
+        return parse_str(v, field="Collector Number").strip()

@@ -2,11 +2,18 @@
 
 Personal tooling for EchoMTG → Moxfield collection sync, S3 exports, and email notifications.
 
+## Local development
+
+- Install deps: `poetry install`
+- **Pre-commit** (repo root): `poetry run pre-commit install` — runs [pre-commit](https://pre-commit.com/) hooks on commit (YAML checks, EOF/trailing space, **Black**, **isort**, **Flake8**, **Pylint**, **mypy** via Poetry). Run all hooks manually: `poetry run pre-commit run --all-files`
+- **Pylint** manually (from repo root): `PYTHONPATH=projects poetry run pylint projects/cli projects/lib projects/models projects/etl tests` — config in [`.pylintrc`](.pylintrc)
+- Tests: `poetry run pytest`
+
 ## TODO
 
 - [ ] CI pipeline
 - [ ] Create debug mode
-- [ ] Monorepo tooling
+- [ ] Logger
 - [ ] Tests
 
 ## Deploying the ETL to AWS

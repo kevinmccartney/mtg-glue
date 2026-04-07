@@ -19,10 +19,7 @@ def parse_str(value: object, field: str) -> str:
     """Require a present value."""
     if value is None:
         raise ValueError(f"{field}: value required (got none)")
-    # this allows an empty string, which is a valid string value
-    text = str(value).strip() or str(value)
-    if not text:
-        raise ValueError(f"{field}: value required (got empty)")
+    text = str(value)
 
     return text
 
@@ -96,5 +93,5 @@ def parse_date(value: object, *, field: str) -> date:
         except ValueError:
             continue
     raise ValueError(
-        f"{field}: unparseable date {value!r} (use MM/DD/YYYY or YYYY-MM-DD)"
+        f"{field}: unparsable date {value!r} (use MM/DD/YYYY or YYYY-MM-DD)"
     )

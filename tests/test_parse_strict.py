@@ -4,12 +4,11 @@ from pathlib import Path
 
 import pytest
 import yaml
-from pydantic import ValidationError
-
 from lib.config import load_config
 from lib.diff import accumulate_inventory
 from models import EchoMtgItem, MoxfieldItem
 from models.types import FilterRule
+from pydantic import ValidationError
 
 
 def _minimal_echo_row(**overrides: object) -> dict[str, object]:
@@ -123,8 +122,8 @@ def test_accumulate_inventory_strict_row() -> None:
         "Count,Tradelist Count,Name,Edition,Condition,Language,Foil,Tags,"
         "Last Modified,Collector Number,Alter,Proxy,Purchase Price\n"
     )
-    row_ok = "1,1,Card,abc,Near Mint,English,normal,,,1,False,False,\n"
-    row_bad = "oops,1,Card,abc,Near Mint,English,normal,,,1,False,False,\n"
+    row_ok = "1,1,Card,abc,Near Mint,English,,,,1,False,False,\n"
+    row_bad = "oops,1,Card,abc,Near Mint,English,,,,1,False,False,\n"
     csv_bad = header + row_ok + row_bad
     with pytest.raises(ValueError, match="row 3"):
         accumulate_inventory(csv_bad)

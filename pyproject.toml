@@ -29,6 +29,7 @@ flake8 = "^7.3.0"
 types-pyyaml = "^6.0.12.20250915"
 types-boto3 = "^1.42.82"
 debugpy = "^1.8.20"
+pre-commit = "^4.5.1"
 
 [tool.poetry.scripts]
 moxfield-import = "cli.echo_mtg_to_moxfield:main"
@@ -37,7 +38,14 @@ echo-moxfield-etl = "etl.echo_moxfield_etl:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
 [build-system]
 requires = ["poetry-core>=1.8.0"]
 build-backend = "poetry.core.masonry.api"
-

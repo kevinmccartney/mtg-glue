@@ -2,20 +2,19 @@ import argparse
 import csv
 from pathlib import Path
 
-from pydantic import ValidationError
-
+from lib.config import DEFAULT_CONFIG_PATH, load_config
+from lib.filters import apply_filter_rules
+from lib.mappers import apply_mapper_rules
+from lib.overrides import apply_override
+from lib.reporters import write_moxfield_reports
+from lib.rewrites import apply_rewrite_rules
+from lib.transformers import echo_to_moxfield_row
 from models import (
     Config,
     EchoMtgItem,
     MoxfieldItem,
 )
-from lib.config import DEFAULT_CONFIG_PATH, load_config
-from lib.rewrites import apply_rewrite_rules
-from lib.mappers import apply_mapper_rules
-from lib.overrides import apply_override
-from lib.transformers import echo_to_moxfield_rows
-from lib.filters import apply_filter_rules
-from lib.reporters import write_moxfield_reports
+from pydantic import ValidationError
 
 
 def convert_echo_export_to_moxfield(
@@ -47,7 +46,7 @@ def convert_echo_export_to_moxfield(
                 continue
             mapped_row = apply_mapper_rules(row, config.mapper_rules)
             rewritten_row = apply_rewrite_rules(mapped_row, config.rewrite_rules)
-            out_rows.extend(echo_to_moxfield_rows(rewritten_row))
+            out_rows.extend([echo_to_moxfield_row(rewritten_row)])
 
     report_results = write_moxfield_reports(
         out_rows, output_path, config.output.aggregation

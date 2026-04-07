@@ -9,15 +9,13 @@ from __future__ import annotations
 
 from typing import Annotated, ClassVar, Literal, Optional, cast, get_args
 
+from lib.utils import parse_bool, parse_str
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     field_validator,
 )
-
-from lib.utils import parse_str, parse_bool
-
 
 MoxfieldFinish = Literal["", "foil", "etched"]
 MoxfieldCondition = Literal[
@@ -164,7 +162,7 @@ class MoxfieldItem(BaseModel):
     def _normalize_language(cls, v: object) -> MoxfieldLanguage:
         raw = parse_str(v, field="Language")
         if raw not in _MOXFIELD_LANGUAGE_ALLOWED:
-            raise ValueError(f"unparseable Language cell: {v!r}")
+            raise ValueError(f"unparsable Language cell: {v!r}")
         return cast(MoxfieldLanguage, raw)
 
     @field_validator("foil", mode="before")
@@ -173,7 +171,7 @@ class MoxfieldItem(BaseModel):
         # this is another rare case where we do a little data massaging for inputs
         raw = parse_str(v, field="Foil").lower() or ""
         if raw not in _MOXFIELD_FINISH_ALLOWED:
-            raise ValueError(f"unparseable Foil cell: {v!r}")
+            raise ValueError(f"unparsable Foil cell: {v!r}")
         return cast(MoxfieldFinish, raw)
 
     @field_validator("condition", mode="before")
@@ -181,7 +179,7 @@ class MoxfieldItem(BaseModel):
     def _normalize_condition(cls, v: object) -> MoxfieldCondition:
         raw = parse_str(str(v), field="Condition")
         if raw not in _MOXFIELD_CONDITION_ALLOWED:
-            raise ValueError(f"unparseable Condition cell: {v!r}")
+            raise ValueError(f"unparsable Condition cell: {v!r}")
         return cast(MoxfieldCondition, raw)
 
     def to_collection_export_cells(self) -> dict[str, str]:

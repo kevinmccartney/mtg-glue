@@ -1,3 +1,4 @@
+---
 version: "3"
 
 dotenv: [".env"]
@@ -31,7 +32,8 @@ tasks:
       - docker compose run -T --rm etl
 
   "etl:run:headed":
-    desc: Run full ETL sync on host with headed Playwright (projects/etl/run_headed_local.sh)
+    desc: Run full ETL sync on host with headed Playwright
+      (projects/etl/run_headed_local.sh)
     cmds:
       - bash projects/etl/run_headed_local.sh {{.CLI_ARGS}}
 
@@ -42,25 +44,28 @@ tasks:
 
   moxfield:import:debug:
     desc: |
-      Run moxfield-import under debugpy on 0.0.0.0:DEBUGPY_PORT (default 5678), wait for VS Code attach.
-      Example: task moxfield:import:debug -- --input .data/echomtg-export.csv --output .out/moxfield-import.csv
+      Run moxfield-import under debugpy on 0.0.0.0:DEBUGPY_PORT
+      (default 5678), wait for VS Code attach.
+      Example: task moxfield:import:debug -- --input .data/echomtg-export.csv \
+        --output .out/moxfield-import.csv
     env:
       PYTHONPATH: projects
     cmds:
       - |
-        poetry run python -m debugpy --listen 0.0.0.0:{{.DEBUGPY_PORT}} --wait-for-client \
-          -m cli.echo_mtg_to_moxfield {{.CLI_ARGS}}
+        poetry run python -m debugpy --listen 0.0.0.0:{{.DEBUGPY_PORT}}
+        --wait-for-client -m cli.echo_mtg_to_moxfield {{.CLI_ARGS}}
 
   etl:debug:
     desc: |
-      Run echo-moxfield-etl under debugpy on 0.0.0.0:DEBUGPY_PORT (default 5678), wait for VS Code attach.
+      Run echo-moxfield-etl under debugpy on 0.0.0.0:DEBUGPY_PORT (default 5678),
+      wait for VS Code attach.
       Set env vars (ECHOMTG_*, MOXFIELD_*, etc.) before running.
     env:
       PYTHONPATH: projects
     cmds:
       - |
-        poetry run python -m debugpy --listen 0.0.0.0:{{.DEBUGPY_PORT}} --wait-for-client \
-          -m etl.echo_moxfield_etl {{.CLI_ARGS}}
+        poetry run python -m debugpy --listen 0.0.0.0:{{.DEBUGPY_PORT}}
+        --wait-for-client -m etl.echo_moxfield_etl {{.CLI_ARGS}}
 
   moxfield:import:help:
     desc: Show moxfield-import CLI options
@@ -92,7 +97,8 @@ tasks:
         -auto-approve
 
   infra:init:mtg-glue:
-    desc: Initialise the mtg_glue workspace with the remote S3 backend (reads TF_STATE_BUCKET and AWS_REGION from .env)
+    desc: Initialise the mtg_glue workspace with the remote S3 backend
+      (reads TF_STATE_BUCKET and AWS_REGION from .env)
     vars:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
@@ -129,7 +135,8 @@ tasks:
       - terraform -chdir={{.MTG_GLUE_DIR}} validate
 
   etl:upload-config:
-    desc: Upload ./config.yaml to s3://<bucket>/config/config.yaml (Terraform bucket_name + AWS creds)
+    desc: Upload ./config.yaml to s3://<bucket>/config/config.yaml
+      (Terraform bucket_name + AWS creds)
     cmds:
       - |
         set -e
@@ -148,11 +155,14 @@ tasks:
         set -e
         REPO="$(terraform -chdir={{.MTG_GLUE_DIR}} output -raw etl_ecr_repository_url)"
         REGISTRY="${REPO%%/*}"
-        aws ecr get-login-password --region "{{.REGION}}" | docker login --username AWS --password-stdin "$REGISTRY"
+        aws ecr get-login-password --region "{{.REGION}}" | docker login \
+          --username AWS --password-stdin "$REGISTRY"
         docker tag mtg-glue-etl:local "${REPO}:latest"
         docker push "${REPO}:latest"
 
-  "etl:run:fargate":
-    desc: Start one-off ETL task on ECS Fargate (terraform etl_manual_run_cli_example piped to sh)
+  etl:run:fargate:
+    desc: Start one-off ETL task on ECS Fargate
+      (terraform etl_manual_run_cli_example piped to sh)
     cmds:
-      - bash -ec 'set -o pipefail; terraform -chdir={{.MTG_GLUE_DIR}} output -raw etl_manual_run_cli_example | sh'
+      - bash -ec 'set -o pipefail; terraform -chdir={{.MTG_GLUE_DIR}} \
+        output -raw etl_manual_run_cli_example | sh'

@@ -426,4 +426,3 @@ moved {
   from = aws_ecs_cluster.main
   to   = aws_ecs_cluster.etl
 }
-

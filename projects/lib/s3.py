@@ -17,7 +17,7 @@ def retain_newest_by_key_prefix(bucket: str, key_prefix: str, keep: int) -> int:
     List objects whose keys start with key_prefix, keep the newest `keep` by
     LastModified, delete the rest. Returns how many objects were deleted.
 
-    S3 lifecycle rules cannot express “keep last N”; this implements that policy
+    S3 lifecycle rules cannot express "keep last N"; this implements that policy
     in application code. With versioning enabled, deletes add delete markers;
     pair with noncurrent version expiration on the bucket for old versions.
     """

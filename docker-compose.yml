@@ -1,7 +1,9 @@
+---
 services:
   etl:
     image: mtg-glue-etl:local
-    # Fargate (x86) pulls linux/amd64; Apple Silicon defaults to arm64 without this.
+    # Fargate (x86) pulls linux/amd64; Apple Silicon defaults
+    # to arm64 without this.
     platform: linux/amd64
     build:
       context: .
@@ -9,10 +11,10 @@ services:
     env_file:
       - .env
     stdin_open: false
-    # entrypoint: ["sh"]
     tty: false
     environment:
       - PYTHONUNBUFFERED=1
+      # forwarding AWS credentials from the host environment
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY
       - AWS_SESSION_TOKEN

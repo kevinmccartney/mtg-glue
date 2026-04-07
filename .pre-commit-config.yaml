@@ -1,0 +1,73 @@
+---
+# Monorepo root: run `poetry run pre-commit install` once per clone.
+# Hooks invoke Black, isort, Flake8, and mypy via Poetry so versions
+# match poetry.lock.
+#
+# Terraform hooks need `terraform` and `tflint` on PATH
+# (e.g. brew install terraform tflint).
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.99.5
+    hooks:
+      - id: terraform_fmt
+        files: ^projects/infra/.*\.(tf|tfvars)$
+      - id: terraform_tflint
+        files: ^projects/infra/.*\.(tf|tfvars)$
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.45.0
+    hooks:
+      - id: typos
+
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.29.0
+    hooks:
+      - id: yamllint
+        args: [--strict, -c=.yamllint]
+
+  - repo: local
+    hooks:
+      - id: black
+        name: black (poetry)
+        entry: poetry run black
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: isort
+        name: isort (poetry)
+        entry: poetry run isort
+        language: system
+        types_or: [python, pyi]
+        args: [--profile, black]
+
+      - id: flake8
+        name: flake8 (poetry)
+        entry: poetry run flake8
+        language: system
+        types_or: [python, pyi]
+
+      - id: pylint
+        name: pylint (poetry)
+        entry: env PYTHONPATH=projects poetry run pylint
+        language: system
+        types_or: [python]
+        files: ^(projects|tests)/
+
+      - id: mypy
+        name: mypy (poetry)
+        entry: poetry run mypy projects tests
+        language: system
+        pass_filenames: false
+        files: ^(projects|tests)/.*\.py$

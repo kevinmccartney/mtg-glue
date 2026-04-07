@@ -10,10 +10,9 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
-from pydantic import ValidationError
-
-from models import MoxfieldItem
 from lib.utils import strip_bom
+from models import MoxfieldItem
+from pydantic import ValidationError
 
 # Rows are correlated by these dimensions (raw Moxfield export cells);
 # Name is compared separately.
@@ -188,7 +187,7 @@ def render_diff_report(report: DiffReport, heading: str) -> str:
     ex_d, ex_q = _inventory_totals(exp)
     im_d, im_q = _inventory_totals(imp)
     lines.append(
-        "  Context: Moxfield CSV was captured before “delete entire collection” "
+        "  Context: Moxfield CSV was captured before 'delete entire collection' "
         "and import; it is the old online collection, not the file you just uploaded."
     )
     lines.append(
@@ -199,7 +198,7 @@ def render_diff_report(report: DiffReport, heading: str) -> str:
         lines.append(
             "  Warning: export side parsed to zero quantity rows "
             "(check Count column and CSV encoding); "
-            "diff “only on import” will list the full import."
+            "diff 'only on import' will list the full import."
         )
 
     only_exp_lines = [
@@ -254,7 +253,7 @@ def format_moxfield_export_vs_import_diff(
     Compare pre-sync Moxfield collection export to the generated import CSV.
 
     This is the snapshot taken **before** delete/import in the browser flow, so a
-    large “only on import” section is normal when replacing the online collection
+    large "only on import" section is normal when replacing the online collection
     with a different Echo-derived file—not a sign that Moxfield rejected rows.
 
     Rows are matched on (Edition, Collector Number, Foil, Language, Condition)
@@ -264,7 +263,7 @@ def format_moxfield_export_vs_import_diff(
 
     Section counts are **distinct printings** (correlation keys); each line also
     shows ``x{qty}`` for copies of that printing. Headers repeat total copies
-    in that section so “1905 lines” is not confused with “1905 cards”.
+    in that section so "1905 lines" is not confused with "1905 cards".
     """
     report = compare_moxfield_inventories(export_csv_text, import_csv_text)
     return render_diff_report(report, heading)

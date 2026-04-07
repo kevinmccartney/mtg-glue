@@ -1,29 +1,35 @@
-from typing import Optional, cast
+from typing import cast
 
 from models import EchoMtgItem, MoxfieldItem
-from models.moxfield_item import MoxfieldCondition as MoxfieldCondition
+from models.moxfield_item import MoxfieldCondition, MoxfieldFinish, MoxfieldLanguage
 
 
-def echo_to_moxfield_rows(row: EchoMtgItem) -> list[MoxfieldItem]:
+def echo_to_moxfield_row(row: EchoMtgItem) -> MoxfieldItem:
     """Transform a single EchoMtgItem into one or more MoxfieldItem rows."""
 
-    def build_row(count: int, foil: Optional[str]) -> MoxfieldItem:
-        return MoxfieldItem(
-            count=count,
-            tradelist_count=count,
-            name=row.name,
-            edition=row.set_code,
-            condition=cast(MoxfieldCondition, row.condition),
-            language=row.language,
-            foil=foil,  # type: ignore[arg-type]
-            collector_number=row.collector_number,
-            alter=False,
-            proxy=False,
-        )
+    def get_foil(row: EchoMtgItem) -> MoxfieldFinish:
+        if row.etched_qty > 0:
+            return "etched"
+        if row.foil_qty > 0:
+            return "foil"
+        return ""
 
-    results: list[MoxfieldItem] = []
-    if row.reg_qty > 0:
-        results.append(build_row(row.reg_qty, None))
-    if row.foil_qty > 0:
-        results.append(build_row(row.foil_qty, "foil"))
-    return results
+    def get_count(row: EchoMtgItem) -> int:
+        if row.etched_qty > 0:
+            return row.etched_qty
+        if row.foil_qty > 0:
+            return row.foil_qty
+        return row.reg_qty
+
+    return MoxfieldItem(
+        count=get_count(row),
+        tradelist_count=get_count(row),
+        name=row.name,
+        edition=row.set_code,
+        condition=cast(MoxfieldCondition, row.condition),
+        language=cast(MoxfieldLanguage, row.language),
+        foil=get_foil(row),
+        collector_number=row.collector_number,
+        alter=False,
+        proxy=False,
+    )

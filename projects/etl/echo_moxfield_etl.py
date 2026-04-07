@@ -11,18 +11,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from dotenv import load_dotenv
-from playwright.sync_api import sync_playwright
-
 from cli.echo_mtg_to_moxfield import convert_echo_export_to_moxfield
+from dotenv import load_dotenv
 from lib.config import load_etl_runtime_config
 from lib.diff import format_moxfield_export_vs_import_diff
 from lib.s3 import boto_client, retain_newest_by_key_prefix, upload_file_to_s3
+from playwright.sync_api import sync_playwright
 
 load_dotenv()
 
 EXPORT_PATH = Path(".data/echomtg-export.csv")
 OUT_DIR = Path(".out")
+CONFIG_DOWNLOAD_PATH = Path("config.yaml")
 
 
 def _env_truthy(name: str) -> bool:
@@ -373,9 +373,7 @@ def _moxfield_import_csv_via_ui(page: Any, moxfield_csv_path: Path) -> None:
         has_text=re.compile(r"^Import$")
     )
     submit_btn.wait_for(state="visible", timeout=15_000)
-    submit_modal = page.locator("div.modal").filter(
-        has=page.locator("input#filename")
-    )
+    submit_modal = page.locator("div.modal").filter(has=page.locator("input#filename"))
     submit_btn.click()
 
     print("  [moxfield] Waiting for import modal to close...")
@@ -396,9 +394,7 @@ def _moxfield_collect_import_errors_safe(page: Any) -> list[str]:
         print(f"      -> warning: could not read Moxfield import errors: {exc}")
         return []
     if import_errors:
-        print(
-            f"      -> Moxfield reported {len(import_errors)} import row error(s)"
-        )
+        print(f"      -> Moxfield reported {len(import_errors)} import row error(s)")
         page.screenshot(path=".data/debug-moxfield-13-import-errors.png")
     return import_errors
 
@@ -495,7 +491,9 @@ def _run(
     upload_file_to_s3(s3_bucket, EXPORT_PATH, echomtg_key)
 
     print("[8/11] Running Moxfield import pipeline (Echo → import CSV)...")
-    etl_config = load_etl_runtime_config()
+    s3_key = os.environ.get("MTG_GLUE_CONFIG_S3_KEY", "").strip()
+    s3_bucket = os.environ.get("S3_BUCKET", "").strip()
+    etl_config = load_etl_runtime_config(CONFIG_DOWNLOAD_PATH, s3_bucket, s3_key)
     exit_code = convert_echo_export_to_moxfield(
         etl_config,
         EXPORT_PATH,
