@@ -48,7 +48,7 @@ tasks:
   ci:etl-push-ecr:
     desc: |
       Init mtg_glue remote state (env TF_STATE_BUCKET, AWS_REGION), build ETL image,
-      push :latest to ECR. Expects AWS credentials
+      push :latest and :<poetry version> to ECR. Expects AWS credentials
       (terraform output, aws ecr, docker login).
     cmds:
       - task: infra:init:mtg-glue
@@ -196,19 +196,28 @@ tasks:
         echo "Uploaded s3://${BUCKET}/config/config.yaml"
 
   etl:push-ecr:
-    desc: Build local image, tag :latest, push to ECR (task infra:apply:mtg-glue first)
+    desc: |
+      Build local image, tag :latest and :<poetry version>, push to ECR
+      (task infra:apply:mtg-glue first)
     vars:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
       - docker compose build etl
       - |
-        set -e
+        set -euo pipefail
+        VERSION="$(poetry version -s)"
+        test -n "${VERSION}" || {
+          echo "empty Poetry version; set [tool.poetry] version in pyproject.toml"
+          exit 1
+        }
         REPO="$(terraform -chdir={{.MTG_GLUE_DIR}} output -raw etl_ecr_repository_url)"
         REGISTRY="${REPO%%/*}"
         aws ecr get-login-password --region "{{.REGION}}" | docker login \
           --username AWS --password-stdin "$REGISTRY"
         docker tag mtg-glue-etl:local "${REPO}:latest"
+        docker tag mtg-glue-etl:local "${REPO}:${VERSION}"
         docker push "${REPO}:latest"
+        docker push "${REPO}:${VERSION}"
 
   etl:run:fargate:
     desc: Start one-off ETL task on ECS Fargate
