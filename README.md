@@ -12,7 +12,6 @@ Personal tooling for EchoMTG → Moxfield collection sync, S3 exports, and email
 
 ## TODO
 
-- [ ] Versioning
 - [ ] Create debug mode
 - [ ] Tests
 - [ ] E2E tests

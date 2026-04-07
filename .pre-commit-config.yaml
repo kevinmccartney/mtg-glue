@@ -44,8 +44,8 @@ repos:
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
-        # Positional `types` replace the hook default; include `bump` so Commitizen’s
-        # default bump_message (`bump: version …`) passes the commit-msg hook.
+        # Positional `types` replace the hook default. Must match CI PR check
+        # (pre-commit run conventional-pre-commit). Includes `release` for bump_message.
         args:
           - build
           - release
