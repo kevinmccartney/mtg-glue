@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import boto3
+from loguru import logger
 
 
 def boto_client(service: str) -> Any:
@@ -60,4 +61,4 @@ def fetch_s3_object_text(bucket: str, key: str) -> str:
 def upload_file_to_s3(bucket: str, local_path: Path, s3_key: str) -> None:
     s3 = boto_client("s3")
     s3.upload_file(str(local_path), bucket, s3_key)
-    print(f"      -> s3://{bucket}/{s3_key}")
+    logger.info("Uploaded to s3://{}/{}", bucket, s3_key)

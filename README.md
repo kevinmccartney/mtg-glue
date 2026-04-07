@@ -11,10 +11,10 @@ Personal tooling for EchoMTG → Moxfield collection sync, S3 exports, and email
 
 ## TODO
 
-- [ ] CI pipeline
-- [ ] Logger
+- [ ] Versioning
 - [ ] Create debug mode
 - [ ] Tests
+- [ ] E2E tests
 
 ## Deploying the ETL to AWS
 
