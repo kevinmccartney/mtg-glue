@@ -1,6 +1,8 @@
 ---
 version: "3"
 
+# Local dev: load repo-root `.env`. CI uses GitHub job `env` for secrets/vars; the
+# workflow creates an empty `.env` so Task (and docker compose `env_file`) can open it.
 dotenv: [".env"]
 
 vars:
@@ -19,6 +21,42 @@ tasks:
     silent: true
     cmds:
       - aws configure export-credentials --profile default --format env
+
+  ci:pre-commit:
+    desc: Run all pre-commit hooks (same as CI; needs terraform +
+      tflint on PATH where hooks require them)
+    cmds:
+      - poetry run pre-commit run --all-files
+
+  ci:test:
+    desc: Run the pytest suite
+    cmds:
+      - poetry run pytest
+
+  ci:etl-push-ecr:
+    desc: |
+      Init mtg_glue remote state (env TF_STATE_BUCKET, AWS_REGION), build ETL image,
+      push :latest to ECR. Expects AWS credentials
+      (terraform output, aws ecr, docker login).
+    cmds:
+      - task: infra:init:mtg-glue
+      - task: etl:push-ecr
+
+  ci:terraform-plan-mtg-glue:
+    desc: |
+      Init mtg_glue remote backend then terraform plan. Needs env TF_STATE_BUCKET,
+      AWS_REGION, NOTIFICATION_SENDER_EMAIL, NOTIFICATION_RECIPIENT_EMAIL.
+    cmds:
+      - task: infra:init:mtg-glue
+      - task: infra:plan:mtg-glue
+
+  ci:terraform-apply-mtg-glue:
+    desc: |
+      Init mtg_glue remote backend then terraform apply -auto-approve.
+      Same env as plan.
+    cmds:
+      - task: infra:init:mtg-glue
+      - task: infra:apply:mtg-glue
 
   etl:build:
     desc: Build the ETL Docker image
@@ -78,7 +116,7 @@ tasks:
       - terraform -chdir={{.BOOTSTRAP_DIR}} init
 
   infra:plan:bootstrap:
-    desc: Plan the bootstrap workspace (reads TF_STATE_BUCKET and AWS_REGION from .env)
+    desc: Plan the bootstrap workspace (reads TF_STATE_BUCKET and AWS_REGION from env)
     vars:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
@@ -87,7 +125,7 @@ tasks:
         -var="aws_region={{.REGION}}"
 
   infra:apply:bootstrap:
-    desc: Apply the bootstrap workspace (reads TF_STATE_BUCKET and AWS_REGION from .env)
+    desc: Apply the bootstrap workspace (reads TF_STATE_BUCKET and AWS_REGION from env)
     vars:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
@@ -98,7 +136,7 @@ tasks:
 
   infra:init:mtg-glue:
     desc: Initialise the mtg_glue workspace with the remote S3 backend
-      (reads TF_STATE_BUCKET and AWS_REGION from .env)
+      (reads TF_STATE_BUCKET and AWS_REGION from env)
     vars:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
@@ -108,7 +146,7 @@ tasks:
         -backend-config="dynamodb_table=terraform-state-locks"
 
   infra:plan:mtg-glue:
-    desc: Plan the mtg_glue workspace (reads email and region from .env)
+    desc: Plan the mtg_glue workspace (reads email and region from env)
     vars:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
@@ -118,7 +156,7 @@ tasks:
         -var="notification_recipient_email={{.NOTIFICATION_RECIPIENT_EMAIL}}"
 
   infra:apply:mtg-glue:
-    desc: Apply the mtg_glue workspace (reads email and region from .env)
+    desc: Apply the mtg_glue workspace (reads email and region from env)
     vars:
       REGION: '{{.AWS_REGION | default "us-east-1"}}'
     cmds:
