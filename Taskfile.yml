@@ -11,6 +11,10 @@ vars:
   DEBUGPY_PORT: "5678"
 
 tasks:
+  commit:
+    desc: Commitizen commit (interactive prompt)
+    cmds:
+      - poetry run cz commit
   env:info:
     desc: Show the Poetry virtualenv path and Python location
     cmds:
@@ -27,6 +31,14 @@ tasks:
       tflint on PATH where hooks require them)
     cmds:
       - poetry run pre-commit run --all-files
+
+  release:bump:
+    desc: |
+      Commitizen version bump (pyproject tag/changelog).
+      Extra args after -- go to cz bump
+      (e.g. task release:bump -- --dry-run).
+    cmds:
+      - bash scripts/release_bump.sh {{.CLI_ARGS}}
 
   ci:test:
     desc: Run the pytest suite

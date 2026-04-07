@@ -24,6 +24,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Ensure .env exists for Task (empty on CI)
         run: test -f .env || touch .env
@@ -42,6 +44,28 @@ jobs:
 
       - name: Install Python dependencies
         run: poetry install --no-interaction
+
+      - name: Require single commit on PR branch
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          count="$(git rev-list --count "${PR_BASE}..${PR_HEAD}")"
+          if [ "${count}" -ne 1 ]; then
+            msg="PR must contain exactly one commit (found ${count})."
+            msg="${msg} Rebase and squash to a single conventional commit."
+            echo "::error::${msg}"
+            exit 1
+          fi
+
+      - name: Verify Conventional Commits (PR)
+        if: github.event_name == 'pull_request'
+        env:
+          CZ_BASE: ${{ github.event.pull_request.base.sha }}
+          CZ_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: poetry run cz check --rev-range "${CZ_BASE}..${CZ_HEAD}"
 
       - uses: arduino/setup-task@v2
         with:
