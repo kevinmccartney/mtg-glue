@@ -1,0 +1,237 @@
+---
+# PR: pre-commit, test, terraform plan. Push to main: apply, then ETL image push.
+# Config is GitHub job `env` + secrets. An empty `.env` is created so Task/docker
+# compose can load the path; values are not read from that file in CI.
+
+name: CI
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure .env exists for Task (empty on CI)
+        run: test -f .env || touch .env
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: poetry
+
+      - name: Install Python dependencies
+        run: poetry install --no-interaction
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: latest
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit
+        run: task ci:pre-commit
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [pre-commit]
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure .env exists for Task (empty on CI)
+        run: test -f .env || touch .env
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: poetry
+
+      - name: Install Python dependencies
+        run: poetry install --no-interaction
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      - name: Run tests
+        run: task ci:test
+
+  terraform-plan:
+    if: github.event_name == 'pull_request'
+    needs: [pre-commit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      AWS_REGION: >-
+        ${{ vars.AWS_REGION }}
+      NOTIFICATION_SENDER_EMAIL: ${{ vars.NOTIFICATION_SENDER_EMAIL }}
+      NOTIFICATION_RECIPIENT_EMAIL: ${{ vars.NOTIFICATION_RECIPIENT_EMAIL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure .env exists for Task/Compose (empty on CI)
+        run: test -f .env || touch .env
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Check required repository variables
+        run: |
+          set -euo pipefail
+          : "${TF_STATE_BUCKET:?Set TF_STATE_BUCKET}"
+          : "${NOTIFICATION_SENDER_EMAIL:?Set NOTIFICATION_SENDER_EMAIL}"
+          : "${NOTIFICATION_RECIPIENT_EMAIL:?Set NOTIFICATION_RECIPIENT_EMAIL}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: >-
+            ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Terraform plan (mtg_glue)
+        run: task ci:terraform-plan-mtg-glue
+
+  terraform-apply:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [pre-commit]
+    permissions:
+      contents: read
+    env:
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      AWS_REGION: >-
+        ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
+      NOTIFICATION_SENDER_EMAIL: ${{ vars.NOTIFICATION_SENDER_EMAIL }}
+      NOTIFICATION_RECIPIENT_EMAIL: ${{ vars.NOTIFICATION_RECIPIENT_EMAIL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure .env exists for Task/Compose (empty on CI)
+        run: test -f .env || touch .env
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Check required repository variables
+        run: |
+          set -euo pipefail
+          : "${TF_STATE_BUCKET:?Set TF_STATE_BUCKET}"
+          : "${NOTIFICATION_SENDER_EMAIL:?Set NOTIFICATION_SENDER_EMAIL}"
+          : "${NOTIFICATION_RECIPIENT_EMAIL:?Set NOTIFICATION_RECIPIENT_EMAIL}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: >-
+            ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Terraform apply (mtg_glue)
+        run: task ci:terraform-apply-mtg-glue
+
+  etl-push-ecr:
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    needs: [test]
+    permissions:
+      contents: read
+    env:
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      AWS_REGION: >-
+        ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure .env exists for Task/Compose (empty on CI)
+        run: test -f .env || touch .env
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Check required repository variables
+        run: |
+          set -euo pipefail
+          : "${TF_STATE_BUCKET:?Set TF_STATE_BUCKET}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: >-
+            ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Build and push ETL image
+        run: task ci:etl-push-ecr
