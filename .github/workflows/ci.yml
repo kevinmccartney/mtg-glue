@@ -239,6 +239,13 @@ jobs:
         with:
           version: 3.x
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry (for poetry version -s in etl:push-ecr)
+        run: pip install poetry
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false

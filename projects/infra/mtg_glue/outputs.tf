@@ -19,7 +19,7 @@ output "notification_recipient_email" {
 }
 
 output "etl_ecr_repository_url" {
-  description = "ECR URL to push the ETL image (use tag :latest)."
+  description = "ECR URL to push the ETL image (tags :latest and :<version> from Poetry)."
   value       = aws_ecr_repository.etl.repository_url
 }
 

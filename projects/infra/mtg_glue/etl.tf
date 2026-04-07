@@ -21,6 +21,42 @@ resource "aws_ecr_repository" "etl" {
   }
 }
 
+# Keeps the four most recently pushed images (tagged). Matches "latest + ~3 prior
+# releases" when each release is one new digest; ECR orders by push time, not semver.
+resource "aws_ecr_lifecycle_policy" "etl" {
+  repository = aws_ecr_repository.etl.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Expire untagged images older than 1 day"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 1
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep at most 4 tagged images"
+        selection = {
+          tagStatus   = "tagged"
+          countType   = "imageCountMoreThan"
+          countNumber = 4
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
 resource "aws_ecs_cluster" "etl" {
   name = "mtg-glue"
 
