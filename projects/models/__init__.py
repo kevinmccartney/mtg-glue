@@ -1,7 +1,7 @@
 """Models for MTG glue conversions."""
 
-from .echo_mtg_export_row import EchoMtgExportRow
-from .moxfield_import_row import MoxfieldImportRow
+from .echo_mtg_item import EchoCondition, EchoMtgItem
+from .moxfield_item import MoxfieldCondition, MoxfieldItem, MoxfieldLanguage
 from .types import (
     OverrideSource,
     OverrideDest,
@@ -14,8 +14,11 @@ from .types import (
 )
 
 __all__ = [
-    "EchoMtgExportRow",
-    "MoxfieldImportRow",
+    "EchoCondition",
+    "EchoMtgItem",
+    "MoxfieldCondition",
+    "MoxfieldItem",
+    "MoxfieldLanguage",
     "OverrideSource",
     "OverrideDest",
     "OverrideRule",

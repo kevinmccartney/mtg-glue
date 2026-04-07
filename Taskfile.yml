@@ -5,6 +5,7 @@ dotenv: [".env"]
 vars:
   BOOTSTRAP_DIR: projects/infra/bootstrap
   MTG_GLUE_DIR: projects/infra/mtg_glue
+  DEBUGPY_PORT: "5678"
 
 tasks:
   env:info:
@@ -38,6 +39,28 @@ tasks:
     desc: Convert EchoMTG export CSV to Moxfield import CSV (extra flags after --)
     cmds:
       - poetry run moxfield-import {{.CLI_ARGS}}
+
+  moxfield:import:debug:
+    desc: |
+      Run moxfield-import under debugpy on 0.0.0.0:DEBUGPY_PORT (default 5678), wait for VS Code attach.
+      Example: task moxfield:import:debug -- --input .data/echomtg-export.csv --output .out/moxfield-import.csv
+    env:
+      PYTHONPATH: projects
+    cmds:
+      - |
+        poetry run python -m debugpy --listen 0.0.0.0:{{.DEBUGPY_PORT}} --wait-for-client \
+          -m cli.echo_mtg_to_moxfield {{.CLI_ARGS}}
+
+  etl:debug:
+    desc: |
+      Run echo-moxfield-etl under debugpy on 0.0.0.0:DEBUGPY_PORT (default 5678), wait for VS Code attach.
+      Set env vars (ECHOMTG_*, MOXFIELD_*, etc.) before running.
+    env:
+      PYTHONPATH: projects
+    cmds:
+      - |
+        poetry run python -m debugpy --listen 0.0.0.0:{{.DEBUGPY_PORT}} --wait-for-client \
+          -m etl.echo_moxfield_etl {{.CLI_ARGS}}
 
   moxfield:import:help:
     desc: Show moxfield-import CLI options

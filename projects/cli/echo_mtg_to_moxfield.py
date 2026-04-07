@@ -6,8 +6,8 @@ from pydantic import ValidationError
 
 from models import (
     Config,
-    EchoMtgExportRow,
-    MoxfieldImportRow,
+    EchoMtgItem,
+    MoxfieldItem,
 )
 from lib.config import DEFAULT_CONFIG_PATH, load_config
 from lib.rewrites import apply_rewrite_rules
@@ -28,18 +28,17 @@ def convert_echo_export_to_moxfield(
         print(f"Input file not found: {input_path}")
         return 1
 
-    out_rows: list[MoxfieldImportRow] = []
+    out_rows: list[MoxfieldItem] = []
 
     with input_path.open("r", encoding="utf-8-sig", newline="") as f_in:
         reader = csv.DictReader(f_in)
-        rows_to_process: list[EchoMtgExportRow] = []
-        for raw in reader:
-
+        rows_to_process: list[EchoMtgItem] = []
+        for row_index, raw in enumerate(reader, start=2):
             try:
-                echo_row = EchoMtgExportRow.model_validate(raw)
-            except ValidationError as exc:  # pragma: no cover - runtime guard
-                print(f"Skipping row due to parse error: {exc}")
-                continue
+                echo_row = EchoMtgItem.model_validate(raw)
+            except ValidationError as exc:
+                print(f"Echo CSV data row {row_index}: parse failed:\n{exc}")
+                return 1
 
             rows_to_process.extend(apply_override(echo_row, config.overrides))
 
@@ -90,7 +89,17 @@ def main() -> int:
     input_path = Path(args.input).expanduser()
     output_path = Path(args.output).expanduser()
     config_path = Path(args.config).expanduser()
-    config = load_config(config_path)
+    try:
+        config = load_config(config_path)
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    except ValueError as exc:
+        print(exc)
+        return 1
+    except ValidationError as exc:
+        print(f"Invalid config ({config_path}):\n{exc}")
+        return 1
 
     return convert_echo_export_to_moxfield(config, input_path, output_path)
 

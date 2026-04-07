@@ -1,0 +1,22 @@
+---
+description: Parse at boundaries; fail on bad input—no defensive normalization
+alwaysApply: true
+---
+
+# Parse, don’t validate
+
+Follow [Parse, don’t validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) (Alexis King): turn untrusted input into **precise domain types at the boundary**, then write logic on those types. Invalid input should **fail there**, not deep inside the pipeline.
+
+## Expectations for this codebase
+
+- **Correct input types**: Prefer `model_validate` / structured parsing (e.g. Pydantic) once, at the edge (CLI, CSV row → model, config load). Downstream code assumes the type is already valid.
+- **Bad data is OK to reject**: If input is wrong, **let the process fail** (validation error, explicit raise, skip row with a clear message). Do not “fix” unknown or invalid values with silent defaults, empty fallbacks, or broad `try/except` that hides mistakes.
+- **No apologizing for bad input**: Avoid extra synonym tables, header aliases, or coercion layers whose only job is to accept sloppy or ambiguous external data—unless the product explicitly requires that compatibility.
+- **Avoid shotgun parsing**: Don’t scatter ad-hoc checks and string normalization across business logic. Parse once; then use the model’s fields.
+
+## When adding code
+
+- New external input → define or extend a **parser layer** (types + validation), not one-off `if`/`get` chains in the middle of transforms.
+- If a value can be invalid, the **type or validator** should express that (`Optional`, constrained literals, validators)—not implicit `""` or magic defaults that mask errors.
+
+Use judgment: user-facing CLI messages and explicit “skip this row” logging at the boundary are fine; silent correction of invalid data is not.

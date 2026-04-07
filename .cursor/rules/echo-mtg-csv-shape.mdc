@@ -1,0 +1,12 @@
+---
+description: EchoMTG export CSV uses a fixed header; do not add aliases or alternate column names
+globs: projects/models/echo_mtg_export_row.py,projects/cli/echo_mtg_to_moxfield.py
+alwaysApply: false
+---
+
+# EchoMTG CSV shape
+
+The EchoMTG collection export has a **single known header row**. Treat it as a fixed contract:
+
+- **`EchoMtgExportRow`** is the contract: required fields, **`extra="forbid"`**, and one **`validation_alias` string per field** matching the real export—no `AliasChoices` or alternate column names unless the user changes the contract.
+- Wrong or partial files fail at **`model_validate`** (missing keys, extra keys, bad cells); do not add redundant header pre-checks in the CLI unless there is a concrete need.

@@ -1,18 +1,21 @@
 {
-  // Debug configurations for this workspace.
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Echo -> Moxfield (poetry)",
-      "type": "python",
-      "request": "launch",
-      "program": "${workspaceFolder}/mtg_glue/echo_mtg_to_moxfield.py",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "justMyCode": true,
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}"
-      }
+      "name": "Attach debugpy (port 5678)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}/projects",
+          "remoteRoot": "${workspaceFolder}/projects"
+        }
+      ],
+      "justMyCode": true
     }
   ]
 }

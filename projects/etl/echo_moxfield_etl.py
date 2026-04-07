@@ -5,9 +5,11 @@ import shutil
 import tempfile
 import time
 import traceback
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
@@ -28,13 +30,18 @@ def _env_truthy(name: str) -> bool:
 
 
 def _s3_csv_retention_count() -> int:
-    raw = os.environ.get("S3_CSV_RETENTION_COUNT", "20").strip()
+    raw = os.environ.get("S3_CSV_RETENTION_COUNT", "").strip()
     if not raw:
         return 20
     try:
-        return int(raw)
-    except ValueError:
-        return 20
+        n = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"S3_CSV_RETENTION_COUNT must be a non-negative integer, got {raw!r}"
+        ) from exc
+    if n < 0:
+        raise ValueError("S3_CSV_RETENTION_COUNT must be non-negative")
+    return n
 
 
 def _trim_timestamped_export_csvs(bucket: str) -> None:
@@ -191,17 +198,18 @@ def _wait_for_completed_download_file(
     )
 
 
-def _moxfield_login_with_capsolver_extension(
-    playwright: Any,
-    username: str,
-    password: str,
-    api_key: str,
-    moxfield_csv_path: Path,
-    moxfield_export_path: Path,
-) -> list[str]:
-    """
-    Log into Moxfield with the CapSolver Chrome extension (CapSolver + Playwright).
-    """
+@dataclass(frozen=True)
+class _MoxfieldCapsolverSession:
+    context: Any
+    page: Any
+    downloads_dir: Path
+
+
+@contextmanager
+def _moxfield_capsolver_browser(
+    playwright: Any, api_key: str
+) -> Iterator[_MoxfieldCapsolverSession]:
+    """Launch Chromium with CapSolver extension; close context and remove temp dirs."""
     _patch_capsolver_extension_config(api_key)
     ext = str(_capsolver_extension_dir().resolve())
     user_data = tempfile.mkdtemp(prefix="pw-capsolver-")
@@ -224,141 +232,203 @@ def _moxfield_login_with_capsolver_extension(
             ),
         )
         page = context.pages[0] if context.pages else context.new_page()
-
-        def _on_captcha_solved() -> None:
-            print("      -> CapSolver: captchaSolvedCallback")
-
-        page.expose_function("captchaSolvedCallback", _on_captcha_solved)
-
-        print("  [moxfield] Navigating to sign-in...")
-        page.goto("https://moxfield.com/account/signin?redirect=/collection")
-        page.wait_for_load_state("domcontentloaded")
-        page.screenshot(path=".data/debug-moxfield-01-page-load.png")
-
-        print("  [moxfield] Waiting for login form...")
-        page.locator("input#username").wait_for(state="visible", timeout=30_000)
-        page.screenshot(path=".data/debug-moxfield-02-login-form.png")
-
-        page.locator("input#username").fill(username)
-        page.locator("input#password").fill(password)
-        page.screenshot(path=".data/debug-moxfield-03-credentials-filled.png")
-        print("      -> credentials filled")
-
-        print("  [moxfield] Waiting for Sign In to enable...")
-        _wait_and_click_moxfield_sign_in(page)
-
-        print("  [moxfield] Waiting for collection URL...")
-        page.wait_for_url(
-            re.compile(r"https://(www\.)?moxfield\.com/collection/?(\?.*)?(#.*)?$"),
-            timeout=60_000,
+        yield _MoxfieldCapsolverSession(
+            context=context, page=page, downloads_dir=downloads_dir
         )
-        print(f"      -> landed on: {page.url}")
-
-        moxfield_export_path.parent.mkdir(parents=True, exist_ok=True)
-
-        print('  [moxfield] Waiting for #maincontent a "More"...')
-        more = page.locator("#maincontent a").filter(has_text=re.compile(r"^More$"))
-        more.wait_for(state="visible", timeout=30_000)
-        page.screenshot(path=".data/debug-moxfield-09-collection-more.png")
-        more.click()
-
-        print("  [moxfield] Exporting collection CSV (before delete)...")
-        export_link = page.locator(".dropdown-menu a.dropdown-item").filter(
-            has_text=re.compile(r"^Export CSV$")
-        )
-        export_link.wait_for(state="visible", timeout=15_000)
-        seen_downloads = {p.resolve() for p in downloads_dir.iterdir()}
-        export_link.click()
-        print("  [moxfield] Waiting for export file in downloads directory...")
-        finished = _wait_for_completed_download_file(
-            downloads_dir, seen_downloads, timeout_s=120.0
-        )
-        shutil.copy2(finished, moxfield_export_path)
-        print(
-            f"      -> saved Moxfield collection export ({finished.name} → "
-            f"{moxfield_export_path.name})"
-        )
-
-        print("  [moxfield] Opening More → Delete Entire Collection...")
-        more = page.locator("#maincontent a").filter(has_text=re.compile(r"^More$"))
-        more.wait_for(state="visible", timeout=30_000)
-        more.click()
-
-        print("  [moxfield] Choosing Delete Entire Collection...")
-        delete_item = page.locator(".dropdown-menu a.dropdown-item").filter(
-            has_text=re.compile(r"^Delete Entire Collection$")
-        )
-        delete_item.wait_for(state="visible", timeout=15_000)
-        delete_item.click()
-
-        print("  [moxfield] Confirming delete modal...")
-        confirm_input = page.locator(".modal-content input")
-        confirm_input.wait_for(state="visible", timeout=30_000)
-        confirm_input.fill("ENTIRE")
-        page.screenshot(path=".data/debug-moxfield-10-delete-modal.png")
-
-        delete_btn = page.locator(".modal-footer button").filter(
-            has_text=re.compile(r"^Permanently Delete$")
-        )
-        delete_btn.wait_for(state="visible", timeout=15_000)
-        delete_btn.click()
-        print("      -> submitted Permanently Delete")
-
-        if not moxfield_csv_path.is_file():
-            raise FileNotFoundError(
-                f"Moxfield import CSV not found: {moxfield_csv_path.resolve()}"
-            )
-
-        print("  [moxfield] Opening More → Import CSV...")
-        more = page.locator("#maincontent a").filter(has_text=re.compile(r"^More$"))
-        more.wait_for(state="visible", timeout=120_000)
-        more.click()
-        import_link = page.locator(".dropdown-menu a.dropdown-item").filter(
-            has_text=re.compile(r"^Import CSV$")
-        )
-        import_link.wait_for(state="visible", timeout=15_000)
-        import_link.click()
-
-        print("  [moxfield] Uploading import CSV...")
-        file_input = page.locator("input#filename")
-        file_input.wait_for(state="attached", timeout=30_000)
-        file_input.set_input_files(str(moxfield_csv_path.resolve()))
-        page.screenshot(path=".data/debug-moxfield-11-import-modal.png")
-
-        submit_btn = page.locator(".modal-footer button").filter(
-            has_text=re.compile(r"^Import$")
-        )
-        submit_btn.wait_for(state="visible", timeout=15_000)
-        submit_modal = page.locator("div.modal").filter(
-            has=page.locator("input#filename")
-        )
-        submit_btn.click()
-
-        print("  [moxfield] Waiting for import modal to close...")
-        submit_modal.wait_for(state="hidden", timeout=300_000)
-
-        print("  [moxfield] Waiting for import success alert...")
-        page.locator(".alert.alert-success").filter(
-            has_text=re.compile(r"Successfully imported your collection\.")
-        ).wait_for(state="visible", timeout=300_000)
-        page.screenshot(path=".data/debug-moxfield-12-import-success.png")
-        print("      -> collection import completed")
-        import_errors: list[str] = []
-        try:
-            import_errors = _collect_moxfield_import_errors(page)
-        except Exception as exc:
-            print(f"      -> warning: could not read Moxfield import errors: {exc}")
-        if import_errors:
-            print(
-                f"      -> Moxfield reported {len(import_errors)} import row error(s)"
-            )
-            page.screenshot(path=".data/debug-moxfield-13-import-errors.png")
-        return import_errors
     finally:
         if context is not None:
             context.close()
         shutil.rmtree(user_data, ignore_errors=True)
         shutil.rmtree(downloads_dir, ignore_errors=True)
+
+
+def _moxfield_maincontent_more_link(page: Any) -> Any:
+    return page.locator("#maincontent a").filter(has_text=re.compile(r"^More$"))
+
+
+def _moxfield_expose_capsolver_callback(page: Any) -> None:
+    def _on_captcha_solved() -> None:
+        print("      -> CapSolver: captchaSolvedCallback")
+
+    page.expose_function("captchaSolvedCallback", _on_captcha_solved)
+
+
+def _moxfield_navigate_to_signin(page: Any) -> None:
+    print("  [moxfield] Navigating to sign-in...")
+    page.goto("https://moxfield.com/account/signin?redirect=/collection")
+    page.wait_for_load_state("domcontentloaded")
+    page.screenshot(path=".data/debug-moxfield-01-page-load.png")
+
+
+def _moxfield_wait_login_form(page: Any) -> None:
+    print("  [moxfield] Waiting for login form...")
+    page.locator("input#username").wait_for(state="visible", timeout=30_000)
+    page.screenshot(path=".data/debug-moxfield-02-login-form.png")
+
+
+def _moxfield_fill_credentials(page: Any, username: str, password: str) -> None:
+    page.locator("input#username").fill(username)
+    page.locator("input#password").fill(password)
+    page.screenshot(path=".data/debug-moxfield-03-credentials-filled.png")
+    print("      -> credentials filled")
+
+
+def _moxfield_submit_sign_in(page: Any) -> None:
+    print("  [moxfield] Waiting for Sign In to enable...")
+    _wait_and_click_moxfield_sign_in(page)
+
+
+def _moxfield_wait_collection_page(page: Any) -> None:
+    print("  [moxfield] Waiting for collection URL...")
+    page.wait_for_url(
+        re.compile(r"https://(www\.)?moxfield\.com/collection/?(\?.*)?(#.*)?$"),
+        timeout=60_000,
+    )
+    print(f"      -> landed on: {page.url}")
+
+
+def _moxfield_export_csv_menu_link(page: Any) -> Any:
+    return page.locator(".dropdown-menu a.dropdown-item").filter(
+        has_text=re.compile(r"^Export CSV$")
+    )
+
+
+def _moxfield_export_collection_to_path(
+    page: Any, downloads_dir: Path, moxfield_export_path: Path
+) -> None:
+    moxfield_export_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print('  [moxfield] Waiting for #maincontent a "More"...')
+    more = _moxfield_maincontent_more_link(page)
+    more.wait_for(state="visible", timeout=30_000)
+    page.screenshot(path=".data/debug-moxfield-09-collection-more.png")
+    more.click()
+
+    print("  [moxfield] Exporting collection CSV (before delete)...")
+    export_link = _moxfield_export_csv_menu_link(page)
+    export_link.wait_for(state="visible", timeout=15_000)
+    seen_downloads = {p.resolve() for p in downloads_dir.iterdir()}
+    export_link.click()
+    print("  [moxfield] Waiting for export file in downloads directory...")
+    finished = _wait_for_completed_download_file(
+        downloads_dir, seen_downloads, timeout_s=120.0
+    )
+    shutil.copy2(finished, moxfield_export_path)
+    print(
+        f"      -> saved Moxfield collection export ({finished.name} → "
+        f"{moxfield_export_path.name})"
+    )
+
+
+def _moxfield_delete_entire_collection(page: Any) -> None:
+    print("  [moxfield] Opening More → Delete Entire Collection...")
+    more = _moxfield_maincontent_more_link(page)
+    more.wait_for(state="visible", timeout=30_000)
+    more.click()
+
+    print("  [moxfield] Choosing Delete Entire Collection...")
+    delete_item = page.locator(".dropdown-menu a.dropdown-item").filter(
+        has_text=re.compile(r"^Delete Entire Collection$")
+    )
+    delete_item.wait_for(state="visible", timeout=15_000)
+    delete_item.click()
+
+    print("  [moxfield] Confirming delete modal...")
+    confirm_input = page.locator(".modal-content input")
+    confirm_input.wait_for(state="visible", timeout=30_000)
+    confirm_input.fill("ENTIRE")
+    page.screenshot(path=".data/debug-moxfield-10-delete-modal.png")
+
+    delete_btn = page.locator(".modal-footer button").filter(
+        has_text=re.compile(r"^Permanently Delete$")
+    )
+    delete_btn.wait_for(state="visible", timeout=15_000)
+    delete_btn.click()
+    print("      -> submitted Permanently Delete")
+
+
+def _moxfield_import_csv_via_ui(page: Any, moxfield_csv_path: Path) -> None:
+    if not moxfield_csv_path.is_file():
+        raise FileNotFoundError(
+            f"Moxfield import CSV not found: {moxfield_csv_path.resolve()}"
+        )
+
+    print("  [moxfield] Opening More → Import CSV...")
+    more = _moxfield_maincontent_more_link(page)
+    more.wait_for(state="visible", timeout=120_000)
+    more.click()
+    import_link = page.locator(".dropdown-menu a.dropdown-item").filter(
+        has_text=re.compile(r"^Import CSV$")
+    )
+    import_link.wait_for(state="visible", timeout=15_000)
+    import_link.click()
+
+    print("  [moxfield] Uploading import CSV...")
+    file_input = page.locator("input#filename")
+    file_input.wait_for(state="attached", timeout=30_000)
+    file_input.set_input_files(str(moxfield_csv_path.resolve()))
+    page.screenshot(path=".data/debug-moxfield-11-import-modal.png")
+
+    submit_btn = page.locator(".modal-footer button").filter(
+        has_text=re.compile(r"^Import$")
+    )
+    submit_btn.wait_for(state="visible", timeout=15_000)
+    submit_modal = page.locator("div.modal").filter(
+        has=page.locator("input#filename")
+    )
+    submit_btn.click()
+
+    print("  [moxfield] Waiting for import modal to close...")
+    submit_modal.wait_for(state="hidden", timeout=300_000)
+
+    print("  [moxfield] Waiting for import success alert...")
+    page.locator(".alert.alert-success").filter(
+        has_text=re.compile(r"Successfully imported your collection\.")
+    ).wait_for(state="visible", timeout=300_000)
+    page.screenshot(path=".data/debug-moxfield-12-import-success.png")
+    print("      -> collection import completed")
+
+
+def _moxfield_collect_import_errors_safe(page: Any) -> list[str]:
+    try:
+        import_errors = _collect_moxfield_import_errors(page)
+    except Exception as exc:
+        print(f"      -> warning: could not read Moxfield import errors: {exc}")
+        return []
+    if import_errors:
+        print(
+            f"      -> Moxfield reported {len(import_errors)} import row error(s)"
+        )
+        page.screenshot(path=".data/debug-moxfield-13-import-errors.png")
+    return import_errors
+
+
+def _moxfield_login_with_capsolver_extension(
+    playwright: Any,
+    username: str,
+    password: str,
+    api_key: str,
+    moxfield_csv_path: Path,
+    moxfield_export_path: Path,
+) -> list[str]:
+    """
+    Log into Moxfield with the CapSolver Chrome extension (CapSolver + Playwright).
+    Export collection CSV, delete collection, import CSV; return import row errors.
+    """
+    with _moxfield_capsolver_browser(playwright, api_key) as session:
+        page = session.page
+        _moxfield_expose_capsolver_callback(page)
+        _moxfield_navigate_to_signin(page)
+        _moxfield_wait_login_form(page)
+        _moxfield_fill_credentials(page, username, password)
+        _moxfield_submit_sign_in(page)
+        _moxfield_wait_collection_page(page)
+        _moxfield_export_collection_to_path(
+            page, session.downloads_dir, moxfield_export_path
+        )
+        _moxfield_delete_entire_collection(page)
+        _moxfield_import_csv_via_ui(page, moxfield_csv_path)
+        return _moxfield_collect_import_errors_safe(page)
 
 
 def _run(

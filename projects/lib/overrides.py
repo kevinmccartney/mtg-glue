@@ -1,25 +1,25 @@
 from __future__ import annotations
 
-from models import EchoMtgExportRow
+from models import EchoMtgItem
 from models.types import OverrideDest, OverrideRule, OverrideSource
 
 
-def _match_rule(row: EchoMtgExportRow, source: OverrideSource) -> bool:
+def _match_rule(row: EchoMtgItem, source: OverrideSource) -> bool:
     """Return True if all specified source criteria match the row."""
     criteria = source.model_dump(exclude_none=True)
     row_data = row.model_dump()
     return all(row_data.get(k) == v for k, v in criteria.items())
 
 
-def _apply_dest(base_row: EchoMtgExportRow, dest: OverrideDest) -> EchoMtgExportRow:
+def _apply_dest(base_row: EchoMtgItem, dest: OverrideDest) -> EchoMtgItem:
     """Apply non-None fields from dest on top of base_row."""
     updates = {k: v for k, v in dest.model_dump().items() if v is not None}
     return base_row.model_copy(update=updates)
 
 
 def apply_override(
-    base_row: EchoMtgExportRow, overrides: list[OverrideRule]
-) -> list[EchoMtgExportRow]:
+    base_row: EchoMtgItem, overrides: list[OverrideRule]
+) -> list[EchoMtgItem]:
     """Find the first matching override rule and apply its dest(s).
 
     Returns a list of one row (override) or multiple rows (split).

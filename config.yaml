@@ -12,6 +12,15 @@ mapper_rules:
       KO: "Korean"
       ZH: "Chinese"
       RU: "Russian"
+  - name: "condition-map"
+    field: "condition"
+    map:
+      M: "Mint"
+      NM: "Near Mint"
+      LP: "Lightly Played"
+      MP: "Moderately Played"
+      HP: "Heavily Played"
+      DM: "Damaged"
 
 rewrite_rules:
   - name: "remove-number"

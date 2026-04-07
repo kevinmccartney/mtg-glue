@@ -1,0 +1,19 @@
+---
+description: Prefer extending existing patterns; avoid parallel helpers and duplicate mapping paths
+globs: projects/**/*.py
+alwaysApply: false
+---
+
+# Reuse abstractions; avoid overlapping new code
+
+Before adding a new module, helper, or config-driven path:
+
+1. **Find the existing mechanism** that already solves the same class of problem (e.g. `apply_mapper_rules` + field validators, or a single export serializer). Trace **end-to-end**: parser → model → mapper → downstream model → CSV.
+
+2. **Check field symmetry.** A mapper output must pass the **target field’s validators** on the model you update (`model_copy` / `model_validate`). If field A accepts arbitrary phrases after map but field B only accepts a closed set of codes, the **same mapper pattern** will not behave the same without **changing the model contract** or **moving the translation** to a layer that expects Moxfield phrases (e.g. only on `MoxfieldImportRow` / export cells).
+
+3. **Do not add** a second mapping table, second export path, or “adjacent” helper that duplicates an existing map (e.g. YAML `condition-map` **and** a Python dict for the same code→phrase) unless you are **replacing** the old path in the same change.
+
+4. **Prefer one source of truth** for “wire format” strings (e.g. Moxfield `Condition` column): either config + mapper at the layer whose types allow it, or the export serializer from internal codes—**not both** diverging.
+
+When fixing a bug, the default action is to **align behavior with the existing abstraction** (fix validation, call site, or serializer) rather than introduce a new parallel pipeline.
