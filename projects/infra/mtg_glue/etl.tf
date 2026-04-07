@@ -143,6 +143,8 @@ locals {
       { name = "NOTIFICATION_SENDER_EMAIL", value = var.notification_sender_email },
       { name = "NOTIFICATION_RECIPIENT_EMAIL", value = var.notification_recipient_email },
       { name = "PYTHONUNBUFFERED", value = "1" },
+      { name = "LOG_FORMAT", value = "json" },
+      { name = "LOG_LEVEL", value = "INFO" },
     ]
     secrets = [
       { name = "ECHOMTG_USERNAME", valueFrom = "${local.etl_secret_arn}:ECHOMTG_USERNAME::" },

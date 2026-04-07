@@ -4,11 +4,13 @@ from pathlib import Path
 
 from lib.config import DEFAULT_CONFIG_PATH, load_config
 from lib.filters import apply_filter_rules
+from lib.log_config import configure_logging
 from lib.mappers import apply_mapper_rules
 from lib.overrides import apply_override
 from lib.reporters import write_moxfield_reports
 from lib.rewrites import apply_rewrite_rules
 from lib.transformers import echo_to_moxfield_row
+from loguru import logger
 from models import (
     Config,
     EchoMtgItem,
@@ -24,7 +26,7 @@ def convert_echo_export_to_moxfield(
 ) -> int:
     """Run EchoMTG CSV → Moxfield import CSV using the given merged config."""
     if not input_path.exists():
-        print(f"Input file not found: {input_path}")
+        logger.error("Input file not found: {}", input_path)
         return 1
 
     out_rows: list[MoxfieldItem] = []
@@ -36,7 +38,7 @@ def convert_echo_export_to_moxfield(
             try:
                 echo_row = EchoMtgItem.model_validate(raw)
             except ValidationError as exc:
-                print(f"Echo CSV data row {row_index}: parse failed:\n{exc}")
+                logger.error("Echo CSV data row {}: parse failed:\n{}", row_index, exc)
                 return 1
 
             rows_to_process.extend(apply_override(echo_row, config.overrides))
@@ -52,7 +54,7 @@ def convert_echo_export_to_moxfield(
         out_rows, output_path, config.output.aggregation
     )
     for result in report_results:
-        print(f"Wrote {result['rows']} rows to {result['path']}")
+        logger.info("Wrote {} rows to {}", result["rows"], result["path"])
     return 0
 
 
@@ -84,6 +86,7 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+    configure_logging()
 
     input_path = Path(args.input).expanduser()
     output_path = Path(args.output).expanduser()
@@ -91,13 +94,13 @@ def main() -> int:
     try:
         config = load_config(config_path)
     except FileNotFoundError as exc:
-        print(exc)
+        logger.error("{}", exc)
         return 1
     except ValueError as exc:
-        print(exc)
+        logger.error("{}", exc)
         return 1
     except ValidationError as exc:
-        print(f"Invalid config ({config_path}):\n{exc}")
+        logger.error("Invalid config ({}):\n{}", config_path, exc)
         return 1
 
     return convert_echo_export_to_moxfield(config, input_path, output_path)

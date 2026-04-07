@@ -15,7 +15,9 @@ from cli.echo_mtg_to_moxfield import convert_echo_export_to_moxfield
 from dotenv import load_dotenv
 from lib.config import load_etl_runtime_config
 from lib.diff import format_moxfield_export_vs_import_diff
+from lib.log_config import configure_logging, set_workload
 from lib.s3 import boto_client, retain_newest_by_key_prefix, upload_file_to_s3
+from loguru import logger
 from playwright.sync_api import sync_playwright
 
 load_dotenv()
@@ -57,9 +59,10 @@ def _trim_timestamped_export_csvs(bucket: str) -> None:
     for prefix in families:
         removed = retain_newest_by_key_prefix(bucket, prefix, keep)
         if removed:
-            print(
-                f"      -> S3 retention: deleted {removed} older object(s) "
-                f"matching {prefix}*.csv"
+            logger.debug(
+                "S3 retention: deleted {} older object(s) matching {}*.csv",
+                removed,
+                prefix,
             )
 
 
@@ -73,7 +76,7 @@ def send_notification(sender: str, recipient: str, subject: str, body: str) -> N
             "Body": {"Text": {"Data": body}},
         },
     )
-    print(f"      -> notification sent to {recipient}")
+    logger.debug("Notification sent to {}", recipient)
 
 
 def _capsolver_extension_dir() -> Path:
@@ -248,20 +251,20 @@ def _moxfield_maincontent_more_link(page: Any) -> Any:
 
 def _moxfield_expose_capsolver_callback(page: Any) -> None:
     def _on_captcha_solved() -> None:
-        print("      -> CapSolver: captchaSolvedCallback")
+        logger.debug("CapSolver: Captcha solved")
 
     page.expose_function("captchaSolvedCallback", _on_captcha_solved)
 
 
 def _moxfield_navigate_to_signin(page: Any) -> None:
-    print("  [moxfield] Navigating to sign-in...")
+    logger.debug("Navigating to Moxfield sign-in...")
     page.goto("https://moxfield.com/account/signin?redirect=/collection")
     page.wait_for_load_state("domcontentloaded")
     page.screenshot(path=".data/debug-moxfield-01-page-load.png")
 
 
 def _moxfield_wait_login_form(page: Any) -> None:
-    print("  [moxfield] Waiting for login form...")
+    logger.debug("Waiting for Moxfield login form...")
     page.locator("input#username").wait_for(state="visible", timeout=30_000)
     page.screenshot(path=".data/debug-moxfield-02-login-form.png")
 
@@ -270,21 +273,21 @@ def _moxfield_fill_credentials(page: Any, username: str, password: str) -> None:
     page.locator("input#username").fill(username)
     page.locator("input#password").fill(password)
     page.screenshot(path=".data/debug-moxfield-03-credentials-filled.png")
-    print("      -> credentials filled")
+    logger.debug("Moxfield Credentials filled")
 
 
 def _moxfield_submit_sign_in(page: Any) -> None:
-    print("  [moxfield] Waiting for Sign In to enable...")
+    logger.debug("Waiting for Moxfield Sign In to enable...")
     _wait_and_click_moxfield_sign_in(page)
 
 
 def _moxfield_wait_collection_page(page: Any) -> None:
-    print("  [moxfield] Waiting for collection URL...")
+    logger.debug("Waiting for Moxfield collection URL...")
     page.wait_for_url(
         re.compile(r"https://(www\.)?moxfield\.com/collection/?(\?.*)?(#.*)?$"),
         timeout=60_000,
     )
-    print(f"      -> landed on: {page.url}")
+    logger.debug(f"Landed on: {page.url}")
 
 
 def _moxfield_export_csv_menu_link(page: Any) -> Any:
@@ -298,42 +301,42 @@ def _moxfield_export_collection_to_path(
 ) -> None:
     moxfield_export_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print('  [moxfield] Waiting for #maincontent a "More"...')
+    logger.debug('Waiting for #maincontent a "More"...')
     more = _moxfield_maincontent_more_link(page)
     more.wait_for(state="visible", timeout=30_000)
     page.screenshot(path=".data/debug-moxfield-09-collection-more.png")
     more.click()
 
-    print("  [moxfield] Exporting collection CSV (before delete)...")
+    logger.debug("Exporting collection CSV (before delete)...")
     export_link = _moxfield_export_csv_menu_link(page)
     export_link.wait_for(state="visible", timeout=15_000)
     seen_downloads = {p.resolve() for p in downloads_dir.iterdir()}
     export_link.click()
-    print("  [moxfield] Waiting for export file in downloads directory...")
+    logger.debug("Waiting for export file in downloads directory...")
     finished = _wait_for_completed_download_file(
         downloads_dir, seen_downloads, timeout_s=120.0
     )
     shutil.copy2(finished, moxfield_export_path)
-    print(
-        f"      -> saved Moxfield collection export ({finished.name} → "
+    logger.debug(
+        f"Saved Moxfield collection export ({finished.name} → "
         f"{moxfield_export_path.name})"
     )
 
 
 def _moxfield_delete_entire_collection(page: Any) -> None:
-    print("  [moxfield] Opening More → Delete Entire Collection...")
+    logger.debug("Opening More → Delete Entire Collection...")
     more = _moxfield_maincontent_more_link(page)
     more.wait_for(state="visible", timeout=30_000)
     more.click()
 
-    print("  [moxfield] Choosing Delete Entire Collection...")
+    logger.debug("Choosing Delete Entire Collection...")
     delete_item = page.locator(".dropdown-menu a.dropdown-item").filter(
         has_text=re.compile(r"^Delete Entire Collection$")
     )
     delete_item.wait_for(state="visible", timeout=15_000)
     delete_item.click()
 
-    print("  [moxfield] Confirming delete modal...")
+    logger.debug("Confirming delete modal...")
     confirm_input = page.locator(".modal-content input")
     confirm_input.wait_for(state="visible", timeout=30_000)
     confirm_input.fill("ENTIRE")
@@ -344,7 +347,7 @@ def _moxfield_delete_entire_collection(page: Any) -> None:
     )
     delete_btn.wait_for(state="visible", timeout=15_000)
     delete_btn.click()
-    print("      -> submitted Permanently Delete")
+    logger.debug("Submitted Permanently Delete request")
 
 
 def _moxfield_import_csv_via_ui(page: Any, moxfield_csv_path: Path) -> None:
@@ -353,7 +356,7 @@ def _moxfield_import_csv_via_ui(page: Any, moxfield_csv_path: Path) -> None:
             f"Moxfield import CSV not found: {moxfield_csv_path.resolve()}"
         )
 
-    print("  [moxfield] Opening More → Import CSV...")
+    logger.debug("Opening More → Import CSV...")
     more = _moxfield_maincontent_more_link(page)
     more.wait_for(state="visible", timeout=120_000)
     more.click()
@@ -363,7 +366,7 @@ def _moxfield_import_csv_via_ui(page: Any, moxfield_csv_path: Path) -> None:
     import_link.wait_for(state="visible", timeout=15_000)
     import_link.click()
 
-    print("  [moxfield] Uploading import CSV...")
+    logger.debug("Uploading import CSV...")
     file_input = page.locator("input#filename")
     file_input.wait_for(state="attached", timeout=30_000)
     file_input.set_input_files(str(moxfield_csv_path.resolve()))
@@ -376,25 +379,25 @@ def _moxfield_import_csv_via_ui(page: Any, moxfield_csv_path: Path) -> None:
     submit_modal = page.locator("div.modal").filter(has=page.locator("input#filename"))
     submit_btn.click()
 
-    print("  [moxfield] Waiting for import modal to close...")
+    logger.debug("Waiting for import modal to close...")
     submit_modal.wait_for(state="hidden", timeout=300_000)
 
-    print("  [moxfield] Waiting for import success alert...")
+    logger.debug("Waiting for import success alert...")
     page.locator(".alert.alert-success").filter(
         has_text=re.compile(r"Successfully imported your collection\.")
     ).wait_for(state="visible", timeout=300_000)
     page.screenshot(path=".data/debug-moxfield-12-import-success.png")
-    print("      -> collection import completed")
+    logger.debug("Collection import completed")
 
 
 def _moxfield_collect_import_errors_safe(page: Any) -> list[str]:
     try:
         import_errors = _collect_moxfield_import_errors(page)
     except Exception as exc:
-        print(f"      -> warning: could not read Moxfield import errors: {exc}")
+        logger.warning("Could not read Moxfield import errors: {}", exc)
         return []
     if import_errors:
-        print(f"      -> Moxfield reported {len(import_errors)} import row error(s)")
+        logger.debug(f"Moxfield reported {len(import_errors)} import row error(s)")
         page.screenshot(path=".data/debug-moxfield-13-import-errors.png")
     return import_errors
 
@@ -419,9 +422,12 @@ def _moxfield_login_with_capsolver_extension(
         _moxfield_fill_credentials(page, username, password)
         _moxfield_submit_sign_in(page)
         _moxfield_wait_collection_page(page)
+        logger.info("Backing up Moxfield Collection")
         _moxfield_export_collection_to_path(
             page, session.downloads_dir, moxfield_export_path
         )
+        set_workload("MoxfieldCollectionUpdate")
+        logger.info("Updating Moxfield Collection")
         _moxfield_delete_entire_collection(page)
         _moxfield_import_csv_via_ui(page, moxfield_csv_path)
         return _moxfield_collect_import_errors_safe(page)
@@ -440,30 +446,31 @@ def _run(
     Run the full sync; return
     (email body, Moxfield row errors — non-empty means failure).
     """
-    print("[sync] starting EchoMTG + pipeline (Playwright next)...", flush=True)
+    set_workload("EchoMTGCollectionExport")
+    logger.info("Exporting EchoMTG Collection")
     echo_headed = _env_truthy("ECHO_MTG_HEADED")
     with sync_playwright() as p:
-        print("[sync] launching Chromium for EchoMTG...", flush=True)
+        logger.debug("Launching Chromium for EchoMTG...")
         browser = p.chromium.launch(headless=not echo_headed)
         page = browser.new_page()
 
-        print("[1/6] Navigating to login page...")
+        logger.debug("[1/6] Navigating to login page...")
         page.goto("https://www.echomtg.com/login/")
 
-        print("[2/6] Filling login form...")
+        logger.debug("[2/6] Filling login form...")
         page.fill("input[placeholder='Enter your email']", username)
         page.fill("input[placeholder='Enter your password']", password)
         page.get_by_role("button", name="Sign in").click()
 
-        print("[3/6] Waiting for dashboard...")
+        logger.debug("[3/6] Waiting for dashboard...")
         page.wait_for_url("https://www.echomtg.com/dashboard/")
-        print(f"      -> landed on: {page.url}")
+        logger.debug(f"      -> landed on: {page.url}")
 
-        print("[4/6] Navigating to collection app...")
+        logger.debug("[4/6] Navigating to collection app...")
         page.goto("https://www.echomtg.com/apps/collection/")
         page.wait_for_load_state("networkidle")
 
-        print("[5/6] Clicking Export to open submenu...")
+        logger.debug("[5/6] Clicking Export to open submenu...")
         page.get_by_role("button", name="Export").click()
 
         inventory_csv_option = page.locator(
@@ -471,14 +478,14 @@ def _run(
             has_text="Inventory CSV",
         )
         inventory_csv_option.wait_for(state="visible")
-        print("      -> submenu visible, clicking 'Inventory CSV'...")
+        logger.debug("      -> submenu visible, clicking 'Inventory CSV'...")
 
         with page.expect_download(timeout=60_000) as download_info:
             inventory_csv_option.click()
 
         download = download_info.value
         download.save_as(str(EXPORT_PATH))
-        print(f"[6/6] Downloaded: {download.suggested_filename}")
+        logger.debug(f"[6/6] Downloaded: {download.suggested_filename}")
 
         browser.close()
 
@@ -487,10 +494,14 @@ def _run(
     moxfield_export_key = f"moxfield/moxfield-collection-export-{timestamp}.csv"
     moxfield_export_path = Path(".data") / f"moxfield-collection-export-{timestamp}.csv"
 
-    print(f"[7/11] Uploading EchoMTG export to s3://{s3_bucket}/echomtg/...")
+    set_workload("EchoMTGCollectionBackup")
+    logger.info("Backing up EchoMTG Collection")
+    logger.debug(f"[7/11] Uploading EchoMTG export to s3://{s3_bucket}/echomtg/...")
     upload_file_to_s3(s3_bucket, EXPORT_PATH, echomtg_key)
 
-    print("[8/11] Running Moxfield import pipeline (Echo → import CSV)...")
+    set_workload("MoxfieldImportCreate")
+    logger.info("Creating Moxfield Import")
+    logger.debug("[8/11] Running Moxfield import pipeline (Echo → import CSV)...")
     s3_key = os.environ.get("MTG_GLUE_CONFIG_S3_KEY", "").strip()
     s3_bucket = os.environ.get("S3_BUCKET", "").strip()
     etl_config = load_etl_runtime_config(CONFIG_DOWNLOAD_PATH, s3_bucket, s3_key)
@@ -505,10 +516,13 @@ def _run(
     moxfield_csv = OUT_DIR / "moxfield-import.csv"
     new_csv_text = moxfield_csv.read_text(encoding="utf-8")
 
-    print(f"[9/11] Uploading Moxfield import to s3://{s3_bucket}/moxfield/...")
+    set_workload("MoxfieldImportBackup")
+    logger.info("Backing up Moxfield Import")
+    logger.debug(f"[9/11] Uploading Moxfield import to s3://{s3_bucket}/moxfield/...")
     upload_file_to_s3(s3_bucket, moxfield_csv, moxfield_key)
 
-    print("[10/11] Logging into Moxfield (CapSolver extension)...")
+    set_workload("MoxfieldCollectionBackup")
+    logger.debug("[10/11] Logging into Moxfield (CapSolver extension)...")
     with sync_playwright() as p:
         moxfield_import_errors = _moxfield_login_with_capsolver_extension(
             p,
@@ -519,7 +533,7 @@ def _run(
             moxfield_export_path,
         )
 
-    print(
+    logger.debug(
         f"[11/11] Uploading Moxfield collection export to s3://{s3_bucket}/moxfield/..."
     )
     upload_file_to_s3(s3_bucket, moxfield_export_path, moxfield_export_key)
@@ -531,7 +545,7 @@ def _run(
         new_csv_text,
         "Diff (pre-sync Moxfield collection export vs this run's import CSV)",
     )
-    print("      -> diff computed (full text in email only)")
+    logger.debug("Diff computed (full text in email only)")
 
     summary = (
         f"Sync completed at {timestamp} (UTC).\n\n"
@@ -548,7 +562,10 @@ def _run(
 
 
 def main() -> int:
-    print("[sync] MTG Glue container started", flush=True)
+    configure_logging()
+    logger.debug("MTG Glue container started")
+    set_workload("ETL")
+    logger.info("Starting ETL pipeline")
     username = os.environ["ECHOMTG_USERNAME"]
     password = os.environ["ECHOMTG_PASSWORD"]
     s3_bucket = os.environ["S3_BUCKET"]
@@ -572,11 +589,12 @@ def main() -> int:
         )
         n_err = len(moxfield_import_errors)
         if n_err:
-            print(
-                f"[error] Moxfield reported {n_err} import row error(s); "
-                "treating sync as failed."
+            logger.error(
+                "Moxfield reported {} import row error(s); treating sync as failed.",
+                n_err,
             )
-            print("[done] Sending failure notification...")
+            set_workload("ETLNotification")
+            logger.info("Sending ETL pipeline status notification")
             subject = (
                 f"MTG Glue sync FAILED ({n_err} Moxfield import row "
                 f"error{'s' if n_err != 1 else ''})"
@@ -593,13 +611,16 @@ def main() -> int:
                 body,
             )
             return 1
-        print("[done] Sending success notification...")
+        set_workload("ETLNotification")
+        logger.info("Sending ETL pipeline status notification")
         send_notification(
             notification_sender,
             notification_recipient,
             "MTG Glue sync succeeded",
             summary,
         )
+        logger.info("ETL pipeline succeeded")
+
         return 0
     except Exception as exc:
         error_body = (
@@ -607,14 +628,17 @@ def main() -> int:
             f"Error: {exc}\n\n"
             f"{traceback.format_exc()}"
         )
-        print(f"[error] {exc}")
-        print("[done] Sending failure notification...")
+        logger.error("{}", exc)
+        set_workload("ETLNotification")
+        logger.info("Sending ETL pipeline status notification")
         send_notification(
             notification_sender,
             notification_recipient,
             "MTG Glue sync FAILED",
             error_body,
         )
+        logger.error("ETL pipeline failed")
+
         return 1
 
 
