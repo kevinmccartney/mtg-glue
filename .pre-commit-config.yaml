@@ -1,7 +1,10 @@
 ---
-# Monorepo root: run `poetry run pre-commit install` once per clone.
+# Monorepo root:
+#   poetry run pre-commit install
+#   poetry run pre-commit install --hook-type commit-msg
 # Hooks invoke Black, isort, Flake8, and mypy via Poetry so versions
-# match poetry.lock.
+# match poetry.lock. Commit messages are linted with conventional-pre-commit
+# (Conventional Commits); use `task commit` for an interactive prompt.
 #
 # Terraform hooks need `terraform` and `tflint` on PATH
 # (e.g. brew install terraform tflint).
@@ -35,6 +38,27 @@ repos:
     hooks:
       - id: yamllint
         args: [--strict, -c=.yamllint]
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        # Positional `types` replace the hook default; include `bump` so Commitizen’s
+        # default bump_message (`bump: version …`) passes the commit-msg hook.
+        args:
+          - build
+          - release
+          - chore
+          - ci
+          - docs
+          - feat
+          - fix
+          - perf
+          - refactor
+          - revert
+          - style
+          - test
 
   - repo: local
     hooks:
