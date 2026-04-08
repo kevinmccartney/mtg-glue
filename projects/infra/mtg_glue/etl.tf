@@ -183,6 +183,10 @@ locals {
       { name = "PYTHONUNBUFFERED", value = "1" },
       { name = "LOG_FORMAT", value = "json" },
       { name = "LOG_LEVEL", value = "INFO" },
+      {
+        name  = "ETL_DEBUG_SCREENSHOTS"
+        value = tostring(var.etl_debug_screenshots)
+      },
     ]
     secrets = [
       { name = "ECHOMTG_USERNAME", valueFrom = "${local.etl_secret_arn}:ECHOMTG_USERNAME::" },

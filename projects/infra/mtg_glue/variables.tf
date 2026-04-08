@@ -67,3 +67,9 @@ variable "s3_csv_retention_count" {
   type        = number
   default     = 20
 }
+
+variable "etl_debug_screenshots" {
+  description = "When true, ECS sets ETL_DEBUG_SCREENSHOTS so the ETL saves Moxfield step ONGs under .data/ and uploads them to s3://<bucket>/etl/screenshots/<run_timestamp>/."
+  type        = bool
+  default     = false
+}

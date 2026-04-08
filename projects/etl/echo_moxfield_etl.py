@@ -31,6 +31,34 @@ def _env_truthy(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
 
 
+@dataclass(frozen=True)
+class MoxfieldDebugScreenshots:
+    """
+    When ``enabled``, write photos under ``.data/``
+    and upload to S3 (``ETL_DEBUG_SCREENSHOTS``).
+    """
+
+    enabled: bool
+    bucket: str
+    run_timestamp: str
+
+
+def _debug_screenshot(
+    page: Any, shots: MoxfieldDebugScreenshots, filename_stem: str
+) -> None:
+    if not shots.enabled:
+        return
+    data_dir = Path(".data")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    local_path = data_dir / f"{filename_stem}.png"
+    page.screenshot(path=str(local_path))
+    s3_key = f"etl/screenshots/{shots.run_timestamp}/{filename_stem}.png"
+    try:
+        upload_file_to_s3(shots.bucket, local_path, s3_key)
+    except Exception as exc:
+        logger.warning("Debug screenshot S3 upload failed ({}): {}", s3_key, exc)
+
+
 def _s3_csv_retention_count() -> int:
     raw = os.environ.get("S3_CSV_RETENTION_COUNT", "").strip()
     if not raw:
@@ -83,7 +111,9 @@ def _capsolver_extension_dir() -> Path:
     return Path(os.environ.get("CAPSOLVER_EXTENSION_PATH", "/opt/capsolver-extension"))
 
 
-def _wait_and_click_moxfield_sign_in(page: Any, timeout_s: float = 120.0) -> None:
+def _wait_and_click_moxfield_sign_in(
+    page: Any, shots: MoxfieldDebugScreenshots, timeout_s: float = 120.0
+) -> None:
     """Wait for a visible, enabled Sign In button, then click it.
 
     Moxfield can render more than one node that matches the label; the first in
@@ -98,7 +128,7 @@ def _wait_and_click_moxfield_sign_in(page: Any, timeout_s: float = 120.0) -> Non
         for i in range(n):
             btn = sign_in.nth(i)
             if btn.is_visible() and btn.is_enabled():
-                page.screenshot(path=".data/debug-moxfield-08-pre-sign-in.png")
+                _debug_screenshot(page, shots, "debug-moxfield-08-pre-sign-in")
                 btn.click()
                 return
         page.wait_for_timeout(200)
@@ -256,29 +286,31 @@ def _moxfield_expose_capsolver_callback(page: Any) -> None:
     page.expose_function("captchaSolvedCallback", _on_captcha_solved)
 
 
-def _moxfield_navigate_to_signin(page: Any) -> None:
+def _moxfield_navigate_to_signin(page: Any, shots: MoxfieldDebugScreenshots) -> None:
     logger.debug("Navigating to Moxfield sign-in...")
     page.goto("https://moxfield.com/account/signin?redirect=/collection")
     page.wait_for_load_state("domcontentloaded")
-    page.screenshot(path=".data/debug-moxfield-01-page-load.png")
+    _debug_screenshot(page, shots, "debug-moxfield-01-page-load")
 
 
-def _moxfield_wait_login_form(page: Any) -> None:
+def _moxfield_wait_login_form(page: Any, shots: MoxfieldDebugScreenshots) -> None:
     logger.debug("Waiting for Moxfield login form...")
     page.locator("input#username").wait_for(state="visible", timeout=30_000)
-    page.screenshot(path=".data/debug-moxfield-02-login-form.png")
+    _debug_screenshot(page, shots, "debug-moxfield-02-login-form")
 
 
-def _moxfield_fill_credentials(page: Any, username: str, password: str) -> None:
+def _moxfield_fill_credentials(
+    page: Any, username: str, password: str, shots: MoxfieldDebugScreenshots
+) -> None:
     page.locator("input#username").fill(username)
     page.locator("input#password").fill(password)
-    page.screenshot(path=".data/debug-moxfield-03-credentials-filled.png")
+    _debug_screenshot(page, shots, "debug-moxfield-03-credentials-filled")
     logger.debug("Moxfield Credentials filled")
 
 
-def _moxfield_submit_sign_in(page: Any) -> None:
+def _moxfield_submit_sign_in(page: Any, shots: MoxfieldDebugScreenshots) -> None:
     logger.debug("Waiting for Moxfield Sign In to enable...")
-    _wait_and_click_moxfield_sign_in(page)
+    _wait_and_click_moxfield_sign_in(page, shots)
 
 
 def _moxfield_wait_collection_page(page: Any) -> None:
@@ -297,14 +329,17 @@ def _moxfield_export_csv_menu_link(page: Any) -> Any:
 
 
 def _moxfield_export_collection_to_path(
-    page: Any, downloads_dir: Path, moxfield_export_path: Path
+    page: Any,
+    downloads_dir: Path,
+    moxfield_export_path: Path,
+    shots: MoxfieldDebugScreenshots,
 ) -> None:
     moxfield_export_path.parent.mkdir(parents=True, exist_ok=True)
 
     logger.debug('Waiting for #maincontent a "More"...')
     more = _moxfield_maincontent_more_link(page)
     more.wait_for(state="visible", timeout=30_000)
-    page.screenshot(path=".data/debug-moxfield-09-collection-more.png")
+    _debug_screenshot(page, shots, "debug-moxfield-09-collection-more")
     more.click()
 
     logger.debug("Exporting collection CSV (before delete)...")
@@ -323,7 +358,9 @@ def _moxfield_export_collection_to_path(
     )
 
 
-def _moxfield_delete_entire_collection(page: Any) -> None:
+def _moxfield_delete_entire_collection(
+    page: Any, shots: MoxfieldDebugScreenshots
+) -> None:
     logger.debug("Opening More → Delete Entire Collection...")
     more = _moxfield_maincontent_more_link(page)
     more.wait_for(state="visible", timeout=30_000)
@@ -340,7 +377,7 @@ def _moxfield_delete_entire_collection(page: Any) -> None:
     confirm_input = page.locator(".modal-content input")
     confirm_input.wait_for(state="visible", timeout=30_000)
     confirm_input.fill("ENTIRE")
-    page.screenshot(path=".data/debug-moxfield-10-delete-modal.png")
+    _debug_screenshot(page, shots, "debug-moxfield-10-delete-modal")
 
     delete_btn = page.locator(".modal-footer button").filter(
         has_text=re.compile(r"^Permanently Delete$")
@@ -350,7 +387,9 @@ def _moxfield_delete_entire_collection(page: Any) -> None:
     logger.debug("Submitted Permanently Delete request")
 
 
-def _moxfield_import_csv_via_ui(page: Any, moxfield_csv_path: Path) -> None:
+def _moxfield_import_csv_via_ui(
+    page: Any, moxfield_csv_path: Path, shots: MoxfieldDebugScreenshots
+) -> None:
     if not moxfield_csv_path.is_file():
         raise FileNotFoundError(
             f"Moxfield import CSV not found: {moxfield_csv_path.resolve()}"
@@ -370,7 +409,7 @@ def _moxfield_import_csv_via_ui(page: Any, moxfield_csv_path: Path) -> None:
     file_input = page.locator("input#filename")
     file_input.wait_for(state="attached", timeout=30_000)
     file_input.set_input_files(str(moxfield_csv_path.resolve()))
-    page.screenshot(path=".data/debug-moxfield-11-import-modal.png")
+    _debug_screenshot(page, shots, "debug-moxfield-11-import-modal")
 
     submit_btn = page.locator(".modal-footer button").filter(
         has_text=re.compile(r"^Import$")
@@ -386,11 +425,13 @@ def _moxfield_import_csv_via_ui(page: Any, moxfield_csv_path: Path) -> None:
     page.locator(".alert.alert-success").filter(
         has_text=re.compile(r"Successfully imported your collection\.")
     ).wait_for(state="visible", timeout=300_000)
-    page.screenshot(path=".data/debug-moxfield-12-import-success.png")
+    _debug_screenshot(page, shots, "debug-moxfield-12-import-success")
     logger.debug("Collection import completed")
 
 
-def _moxfield_collect_import_errors_safe(page: Any) -> list[str]:
+def _moxfield_collect_import_errors_safe(
+    page: Any, shots: MoxfieldDebugScreenshots
+) -> list[str]:
     try:
         import_errors = _collect_moxfield_import_errors(page)
     except Exception as exc:
@@ -398,7 +439,7 @@ def _moxfield_collect_import_errors_safe(page: Any) -> list[str]:
         return []
     if import_errors:
         logger.debug(f"Moxfield reported {len(import_errors)} import row error(s)")
-        page.screenshot(path=".data/debug-moxfield-13-import-errors.png")
+        _debug_screenshot(page, shots, "debug-moxfield-13-import-errors")
     return import_errors
 
 
@@ -409,6 +450,7 @@ def _moxfield_login_with_capsolver_extension(
     api_key: str,
     moxfield_csv_path: Path,
     moxfield_export_path: Path,
+    shots: MoxfieldDebugScreenshots,
 ) -> list[str]:
     """
     Log into Moxfield with the CapSolver Chrome extension (CapSolver + Playwright).
@@ -417,20 +459,20 @@ def _moxfield_login_with_capsolver_extension(
     with _moxfield_capsolver_browser(playwright, api_key) as session:
         page = session.page
         _moxfield_expose_capsolver_callback(page)
-        _moxfield_navigate_to_signin(page)
-        _moxfield_wait_login_form(page)
-        _moxfield_fill_credentials(page, username, password)
-        _moxfield_submit_sign_in(page)
+        _moxfield_navigate_to_signin(page, shots)
+        _moxfield_wait_login_form(page, shots)
+        _moxfield_fill_credentials(page, username, password, shots)
+        _moxfield_submit_sign_in(page, shots)
         _moxfield_wait_collection_page(page)
         logger.info("Backing up Moxfield Collection")
         _moxfield_export_collection_to_path(
-            page, session.downloads_dir, moxfield_export_path
+            page, session.downloads_dir, moxfield_export_path, shots
         )
         set_workload("MoxfieldCollectionUpdate")
         logger.info("Updating Moxfield Collection")
-        _moxfield_delete_entire_collection(page)
-        _moxfield_import_csv_via_ui(page, moxfield_csv_path)
-        return _moxfield_collect_import_errors_safe(page)
+        _moxfield_delete_entire_collection(page, shots)
+        _moxfield_import_csv_via_ui(page, moxfield_csv_path, shots)
+        return _moxfield_collect_import_errors_safe(page, shots)
 
 
 def _run(
@@ -523,6 +565,11 @@ def _run(
 
     set_workload("MoxfieldCollectionBackup")
     logger.debug("[10/11] Logging into Moxfield (CapSolver extension)...")
+    debug_shots = MoxfieldDebugScreenshots(
+        enabled=_env_truthy("ETL_DEBUG_SCREENSHOTS"),
+        bucket=s3_bucket,
+        run_timestamp=timestamp,
+    )
     with sync_playwright() as p:
         moxfield_import_errors = _moxfield_login_with_capsolver_extension(
             p,
@@ -531,6 +578,7 @@ def _run(
             capsolver_api_key,
             moxfield_csv,
             moxfield_export_path,
+            debug_shots,
         )
 
     logger.debug(
