@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mtg-glue"
-version = "0.2.0"
+version = "0.3.0"
 description = "A bunch of scripts I use to manage my MTG collection."
 authors = ["Kevin McCartney"]
 readme = "README.md"
