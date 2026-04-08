@@ -21,8 +21,9 @@ resource "aws_ecr_repository" "etl" {
   }
 }
 
-# Keeps the four most recently pushed images (tagged). Matches "latest + ~3 prior
-# releases" when each release is one new digest; ECR orders by push time, not semver.
+# Keeps the four most recently pushed images (tagged). tagPatternList is required
+# when tagStatus is tagged; "*" matches all tags (latest + semver). ECR orders by
+# push time, not semver.
 resource "aws_ecr_lifecycle_policy" "etl" {
   repository = aws_ecr_repository.etl.name
 
@@ -45,9 +46,10 @@ resource "aws_ecr_lifecycle_policy" "etl" {
         rulePriority = 2
         description  = "Keep at most 4 tagged images"
         selection = {
-          tagStatus   = "tagged"
-          countType   = "imageCountMoreThan"
-          countNumber = 4
+          tagStatus      = "tagged"
+          tagPatternList = ["*"]
+          countType      = "imageCountMoreThan"
+          countNumber    = 4
         }
         action = {
           type = "expire"
