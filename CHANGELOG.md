@@ -1,3 +1,9 @@
+## v0.3.0 (2026-04-07)
+
+### Feat
+
+- provide config gate for screenshots
+
 ## v0.2.0 (2026-04-07)
 
 ### Feat
